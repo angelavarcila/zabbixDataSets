@@ -167,6 +167,19 @@ public class HistoryLogJpaController implements Serializable {
         q.setParameter("clock_hasta", clock_hasta);
         return q.getResultList();
     }
+    
+    public HistoryLog getHistoryLogByItemIdAndClock(long itemid, long clock){
+        EntityManager em = getEntityManager();
+        Query q = em.createQuery("SELECT h FROM HistoryLog h WHERE h.historyLogPK.itemid = :itemid AND h.historyLogPK.clock = :clock");
+        q.setParameter("itemid", itemid);
+        q.setParameter("clock", clock);
+        
+        if(q.getResultList()!=null && !q.getResultList().isEmpty()){
+            return (HistoryLog) q.getResultList().get(0);
+        }else{
+            return null;
+        }
+    }
 
     public String getHistoryLogValueByItemId(Long itemid, int clock) {
         EntityManager em = getEntityManager();

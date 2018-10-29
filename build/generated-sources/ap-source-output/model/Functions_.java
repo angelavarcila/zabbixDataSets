@@ -6,7 +6,7 @@ import javax.persistence.metamodel.StaticMetamodel;
 import model.Items;
 import model.Triggers;
 
-@Generated(value="EclipseLink-2.5.2.v20140319-rNA", date="2018-10-26T16:14:46")
+@Generated(value="EclipseLink-2.5.2.v20140319-rNA", date="2018-10-29T11:10:50")
 @StaticMetamodel(Functions.class)
 public class Functions_ { 
 

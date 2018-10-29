@@ -166,6 +166,19 @@ public class HistoryJpaController implements Serializable {
         q.setParameter("clock_hasta", clock_hasta);
         return q.getResultList();
     }
+    
+    public History getHistoryByItemIdAndClock(long itemid, long clock){
+        EntityManager em = getEntityManager();
+        Query q = em.createQuery("SELECT h FROM History h WHERE h.historyPK.itemid = :itemid AND h.historyPK.clock = :clock");
+        q.setParameter("itemid", itemid);
+        q.setParameter("clock", clock);
+        
+        if(q.getResultList()!=null && !q.getResultList().isEmpty()){
+            return (History) q.getResultList().get(0);
+        }else{
+            return null;
+        }
+    }
 
     public Double getHistoryValueByItemId(long itemid, int clock) {
         EntityManager em = getEntityManager();

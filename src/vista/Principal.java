@@ -160,32 +160,32 @@ public class Principal {
                 case 4:
                     System.out.println("Escriba la ruta del archivo");
                     String fileName = scanner.next();
-                    
+
                     List<String[]> matriz = gestionArchivo.getMatrixFromCSV(fileName);
-                    
+
                     //Sacar la lista de atributos con el index como selección
                     System.out.println("---------------------");
-                    for(int i = 0; i < (matriz.get(0)).length; i++){
-                        System.out.println(i+" - "+matriz.get(0)[i]);
+                    for (int i = 0; i < (matriz.get(0)).length; i++) {
+                        System.out.println(i + " - " + matriz.get(0)[i]);
                     }
                     System.out.println("---------------------");
-                    
+
                     //SUBMENÚ Seleccione el tipo de operación
                     System.out.println("Seleccione el tipo de operación que va a realizar");
                     System.out.println("1. + Suma");
                     System.out.println("2. % Porcentaje");
                     int operation = scanner.nextInt();
-                    
+
                     System.out.println("Ingrese el número de las columnas con las cuales desea realizar una operación (separadas por coma)");
                     String[] clmns_ope = scanner.next().split(",");
-                    int [] num_clmns_ope = new int[clmns_ope.length];
-                    for(int i = 0; i < clmns_ope.length; i++){
+                    int[] num_clmns_ope = new int[clmns_ope.length];
+                    for (int i = 0; i < clmns_ope.length; i++) {
                         num_clmns_ope[i] = Integer.valueOf(clmns_ope[i]);
                     }
-                    
-                    System.out.println("Ingrese el nombre de la columna que se va a crear a partir de la operación");  
+
+                    System.out.println("Ingrese el nombre de la columna que se va a crear a partir de la operación");
                     String newcolumn = scanner.next();
-                    
+
                     executeOperation(matriz, num_clmns_ope, operation, fileName, newcolumn);
 
                 case 9:
@@ -222,7 +222,7 @@ public class Principal {
                     + "8_recovery_ns,9_event_duration,10_function_name,11_function_parameter,12_trigger_dscr,13_trigger_expression,"
                     + "14_trigger_flags,15_trigger_priority,16_trigger_type,17_trigger_recovery_mode,18_trigger_recovery_expression,"
                     + "19_item_delay,20_item_name,21_item_type,22_item_value_type,23_item_dscr,24_item_flags,25_item_port,"
-                    + "26_item_snmpcommunity,27_item_snmpoid,28_item_units";
+                    + "26_item_snmpcommunity,27_item_snmpoid,28_item_units,29_item_history_value";
             gestionArchivo.escrbir(encabezado, false);
 
             for (Functions f : lista) {
@@ -478,7 +478,51 @@ public class Principal {
         escriba.append(function.getItemid().getPort()).append(","); //puerto monitorizado por el ítem
         escriba.append(function.getItemid().getSnmpCommunity()).append(","); //comunidad snmp
         escriba.append(function.getItemid().getSnmpOid()).append(","); //oid snmp
-        escriba.append(function.getItemid().getUnits()); //unidades del item
+        escriba.append(function.getItemid().getUnits()).append(","); //unidades del item
+
+        //VALOR DEL ÍTEM EN EL TIEMPO CLOCK
+        switch (function.getItemid().getValueType()) {
+            case 0: //float
+                History h = historyJpaController.getHistoryByItemIdAndClock(function.getItemid().getItemid(), event.getClock());             
+                if(h!=null){
+                    escriba.append(h.getValue());
+                }else {
+                    escriba.append("?");
+                }
+                break;
+            case 1: //Str
+                HistoryStr hstr =historyStrJpaController.getHistoryStrByItemIdAndClock(function.getItemid().getItemid(), event.getClock());    
+                if(hstr!=null){
+                    escriba.append(hstr.getValue());
+                }else {
+                    escriba.append("?");
+                }
+                break;
+            case 2: //Log
+                HistoryLog hlog = historyLogJpaController.getHistoryLogByItemIdAndClock(function.getItemid().getItemid(), event.getClock());              
+                if(hlog!=null){
+                    escriba.append(hlog.getValue());
+                }else {
+                    escriba.append("?");
+                }
+                break;
+            case 3: //Uint
+                HistoryUint huint = historyUintJpaController.getHistoryUintByItemIdAndClock(function.getItemid().getItemid(), event.getClock());         
+                if(huint!=null){
+                    escriba.append(huint.getValue());
+                }else {
+                    escriba.append("?");
+                }
+                break;
+            default: //Text
+                HistoryText htext = historyTextJpaController.getHistoryTextByItemIdAndClock(function.getItemid().getItemid(), event.getClock());         
+                if(htext!=null){
+                    escriba.append(htext.getValue());
+                }else {
+                    escriba.append("?");
+                }
+                break;
+        }
 
         return escriba.toString();
     }
@@ -632,13 +676,12 @@ public class Principal {
             Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
         }
     }*/
-
     /**
-     * 
+     *
      * @param matriz
      * @param num_clmns_ope
      * @param operation
-     * @param pathcsv 
+     * @param pathcsv
      */
     private static void executeOperation(List<String[]> matriz, int[] num_clmns_ope, int operation, String pathcsv, String newcolumn) {
         BufferedWriter bw = null;
@@ -646,24 +689,24 @@ public class Principal {
             StringBuilder encabezado = new StringBuilder();
             for (int i = 0; i < matriz.get(0).length; i++) {
                 encabezado.append(matriz.get(0)[i]).append(",");
-            }        
+            }
             encabezado.append(newcolumn);
 
-            File archivo = new File(pathcsv.replaceAll(".csv", "")+"_"+newcolumn+".csv");
+            File archivo = new File(pathcsv.replaceAll(".csv", "") + "_" + newcolumn + ".csv");
             bw = new BufferedWriter(new FileWriter(archivo));
             gestionArchivo.leerArchivo(archivo.getName());
             gestionArchivo.escrbir(encabezado.toString(), false);
-            
-            if(operation==1){ //suma
+
+            if (operation == 1) { //suma
                 for (int i = 1; i < matriz.size(); i++) {
-                    String [] row = matriz.get(i);
+                    String[] row = matriz.get(i);
                     long suma = 0;
                     for (int j = 0; j < num_clmns_ope.length; j++) {
                         int indexAttr = num_clmns_ope[j];
                         //System.err.println("------>"+row[indexAttr].length());
                         //////Este if es temporal, los datos q voy a recoger despues se van a tomar al tiempo, entonces no voy a tener espacios vacíos.
-                        if(!row[indexAttr].isEmpty()){
-                            suma = suma + Long.valueOf(row[indexAttr]);   
+                        if (!row[indexAttr].isEmpty()) {
+                            suma = suma + Long.valueOf(row[indexAttr]);
                         }
                         ////////////////////////////////////
                     }
@@ -673,16 +716,16 @@ public class Principal {
                         instancia.append(row[j]).append(",");
                     }
                     instancia.append(suma);
-                    gestionArchivo.escrbir(instancia.toString(), true);                    
-                } 
-            }else if (operation==2){ //porcentaje
+                    gestionArchivo.escrbir(instancia.toString(), true);
+                }
+            } else if (operation == 2) { //porcentaje
                 for (int i = 1; i < matriz.size(); i++) {
-                    String [] row = matriz.get(i);
+                    String[] row = matriz.get(i);
                     int suma_unos = 0;
                     for (int j = 0; j < num_clmns_ope.length; j++) {
                         int indexAttr = num_clmns_ope[j];
                         //////Este if es temporal, los datos q voy a recoger despues se van a tomar al tiempo, entonces no voy a tener espacios vacíos.
-                        if(!row[indexAttr].isEmpty()){
+                        if (!row[indexAttr].isEmpty()) {
                             suma_unos = suma_unos + Integer.valueOf(row[indexAttr]);
                         }//////////////////////////////////////
                     }
@@ -693,8 +736,8 @@ public class Principal {
                         instancia.append(row[j]).append(",");
                     }
                     instancia.append(resultado);
-                    gestionArchivo.escrbir(instancia.toString(), true);                    
-                } 
+                    gestionArchivo.escrbir(instancia.toString(), true);
+                }
             }
         } catch (IOException ex) {
             Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
@@ -704,6 +747,6 @@ public class Principal {
             } catch (IOException ex) {
                 Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
             }
-        }    
+        }
     }
 }
