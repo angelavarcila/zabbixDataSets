@@ -19,10 +19,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Timestamp;
+import java.util.AbstractList;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import model.Events;
@@ -75,6 +78,7 @@ public class Principal {
         String hdesde; //hora desde
         String fhasta; //fecha hasta
         String hhasta; //hora hasta
+        String fileName;
         int desde;
         int hasta;
 
@@ -88,6 +92,7 @@ public class Principal {
             System.out.println("2. Histórico de ítems por host");
             System.out.println("3. Generar data set (sólo información SNMP)");
             System.out.println("4. Operaciones con columnas");
+            System.out.println("5. Generar etiqueta");
             System.out.println("9. Salir");
             opc = scanner.nextInt();
 
@@ -159,7 +164,7 @@ public class Principal {
                     break;
                 case 4:
                     System.out.println("Escriba la ruta del archivo");
-                    String fileName = scanner.next();
+                    fileName = scanner.next();
 
                     List<String[]> matriz = gestionArchivo.getMatrixFromCSV(fileName);
 
@@ -188,6 +193,83 @@ public class Principal {
 
                     executeOperation(matriz, num_clmns_ope, operation, fileName, newcolumn);
 
+                    break;
+                case 5:
+                    //GENERAR ETIQUETA
+                    System.out.println("Escriba la ruta del archivo CSV");
+                    fileName = scanner.next();
+
+                    //data set del dispositivo periférico sin etiqueta
+                    List<String[]> matrizPerif = gestionArchivo.getMatrixFromCSV(fileName);
+
+                    System.out.println("Escriba los nombres de los elementos de red internos (separados por coma)");
+                    String[] eleRedInt = scanner.next().split(",");
+
+                    System.out.println("Fecha Desde: yyyy-MM-dd");
+                    fdesde = scanner.next();
+                    System.out.println("Hora Desde: hh:mm:ss");
+                    hdesde = scanner.next();
+                    dtimestamp = Timestamp.valueOf(fdesde + " " + hdesde);
+
+                    System.out.println("Fecha Hasta: yyyy-MM-dd");
+                    fhasta = scanner.next();
+                    System.out.println("Hora Hasta: formato: hh:mm:ss");
+                    hhasta = scanner.next();
+                    htimestamp = Timestamp.valueOf(fhasta + " " + hhasta);
+
+                    // buscar los eventos de cada uno de los elmentos de red internos
+                    desde = Integer.parseInt(String.valueOf(dtimestamp.getTime()).substring(0, 10));
+                    hasta = Integer.parseInt(String.valueOf(htimestamp.getTime()).substring(0, 10));
+                    
+                    int numAttr = matrizPerif.get(0).length;
+                    
+                    for (int i = 0; i < eleRedInt.length; i++) {
+                        //List<Events> get event list by host
+                        List<Events> eventIntLst = null;//TODO/////////////////////
+                        //List<String[]> newMatrizPerif = new ArrayList();
+                        for (Events event : eventIntLst) {
+                            //Pasar eel siguiente for a un método y de paramtro pasarle la matriz, ya sea la nueva o la vieja
+                            for (int j = 1; j < matrizPerif.size(); j++) {//desde 1 para no leer el encabezado              
+                                int tPerif = Integer.valueOf(matrizPerif.get(j)[0]);
+                                int tPerifAnterior = 0;
+                                if (j != 1) {
+                                    tPerifAnterior = Integer.valueOf(matrizPerif.get(j - 1)[0]);
+                                }
+
+                                if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
+                                    //matrizPerif.get(j) CLASIFICA EVENTO
+                                    List<String> instancia = Arrays.asList(matrizPerif.get(j));
+                                    if (instancia.size() == numAttr) {
+                                        //Debo agregar la clasee como nuevo String
+                                        instancia.add("EV:" + event.getEventid());
+                                    } else {
+                                        String classs = instancia.get(instancia.size() - 1);
+                                        instancia.remove(instancia.size() - 1);
+                                        instancia.add(classs + "-EV;" + event.getEventid());//LEE PEGO EL OTRO EVENTO
+                                    }
+                                    //remplazar la fila de la matriz por la nueva instancia
+                                    String[] nuevoArray = new String[instancia.size()]; 
+                                    //Aquí convertimos la lista a arreglo nuevamente
+                                    nuevoArray = instancia.toArray(nuevoArray);
+                                    matrizPerif.set(j, nuevoArray); //en caso de q salga error, lo hago con iterator
+                                    break;
+                                }
+                            }
+
+                        }
+                    }
+                    break;
+                case 6:
+                    //TODO agrupar los archivos que contienen los flujos
+                    String filesPath = "/home/angela/nProbe";
+
+                    //leer la fecha de inicio y fin (año/mes/día)
+                    System.out.println("Fecha Desde: yyyy/MM/dd");
+                    fdesde = scanner.next();
+
+                    System.out.println("Fecha Hasta: yyyy/MM/dd");
+                    fhasta = scanner.next();
+                    break;
                 case 9:
                     System.out.println("ADIOS!!!");
                     break;
@@ -198,7 +280,7 @@ public class Principal {
         } while (opc != 9);
 
     }
-
+  
     /**
      * Obtiene funciones por el nombre de host que se escribe como parámetro
      *
@@ -411,8 +493,12 @@ public class Principal {
                 }
             }
 
+            // convert to TreeSet para que la lista quede ordenada
+            TreeSet<Integer> tsHT = new TreeSet<Integer>(hs);
+            
             // Armar columnas 
-            for (Integer timestamp : hs) {
+            //for (Integer timestamp : hs) {
+            for (Integer timestamp : tsHT) {
                 gestionArchivo.escrbir(getLineSNMPInstance(listaItems, timestamp), true);
             }
         } catch (IOException ex) {
@@ -483,42 +569,42 @@ public class Principal {
         //VALOR DEL ÍTEM EN EL TIEMPO CLOCK
         switch (function.getItemid().getValueType()) {
             case 0: //float
-                History h = historyJpaController.getHistoryByItemIdAndClock(function.getItemid().getItemid(), event.getClock());             
-                if(h!=null){
+                History h = historyJpaController.getHistoryByItemIdAndClock(function.getItemid().getItemid(), event.getClock());
+                if (h != null) {
                     escriba.append(h.getValue());
-                }else {
+                } else {
                     escriba.append("?");
                 }
                 break;
             case 1: //Str
-                HistoryStr hstr =historyStrJpaController.getHistoryStrByItemIdAndClock(function.getItemid().getItemid(), event.getClock());    
-                if(hstr!=null){
+                HistoryStr hstr = historyStrJpaController.getHistoryStrByItemIdAndClock(function.getItemid().getItemid(), event.getClock());
+                if (hstr != null) {
                     escriba.append(hstr.getValue());
-                }else {
+                } else {
                     escriba.append("?");
                 }
                 break;
             case 2: //Log
-                HistoryLog hlog = historyLogJpaController.getHistoryLogByItemIdAndClock(function.getItemid().getItemid(), event.getClock());              
-                if(hlog!=null){
+                HistoryLog hlog = historyLogJpaController.getHistoryLogByItemIdAndClock(function.getItemid().getItemid(), event.getClock());
+                if (hlog != null) {
                     escriba.append(hlog.getValue());
-                }else {
+                } else {
                     escriba.append("?");
                 }
                 break;
             case 3: //Uint
-                HistoryUint huint = historyUintJpaController.getHistoryUintByItemIdAndClock(function.getItemid().getItemid(), event.getClock());         
-                if(huint!=null){
+                HistoryUint huint = historyUintJpaController.getHistoryUintByItemIdAndClock(function.getItemid().getItemid(), event.getClock());
+                if (huint != null) {
                     escriba.append(huint.getValue());
-                }else {
+                } else {
                     escriba.append("?");
                 }
                 break;
             default: //Text
-                HistoryText htext = historyTextJpaController.getHistoryTextByItemIdAndClock(function.getItemid().getItemid(), event.getClock());         
-                if(htext!=null){
+                HistoryText htext = historyTextJpaController.getHistoryTextByItemIdAndClock(function.getItemid().getItemid(), event.getClock());
+                if (htext != null) {
                     escriba.append(htext.getValue());
-                }else {
+                } else {
                     escriba.append("?");
                 }
                 break;
