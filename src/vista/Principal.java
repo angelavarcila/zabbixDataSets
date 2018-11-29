@@ -13,6 +13,7 @@ import control.HistoryStrJpaController;
 import control.HistoryTextJpaController;
 import control.HistoryUintJpaController;
 import control.ItemsJpaController;
+import control.TriggersJpaController;
 import control.util.GestionArchivo;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -22,6 +23,8 @@ import java.sql.Timestamp;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
@@ -36,6 +39,7 @@ import model.HistoryStr;
 import model.HistoryText;
 import model.HistoryUint;
 import model.Items;
+import model.Triggers;
 
 /**
  *
@@ -51,6 +55,7 @@ public class Principal {
     private static ItemsJpaController itemsJpaController;
     private static FunctionsJpaController functionsJpaController;
     private static EventsJpaController eventsJpaController;
+    private static TriggersJpaController triggersJpaController;
 
     private static HistoryJpaController historyJpaController;
     private static HistoryLogJpaController historyLogJpaController;
@@ -62,6 +67,7 @@ public class Principal {
         itemsJpaController = new ItemsJpaController();
         functionsJpaController = new FunctionsJpaController();
         eventsJpaController = new EventsJpaController();
+        triggersJpaController = new TriggersJpaController();
 
         historyJpaController = new HistoryJpaController();
         historyLogJpaController = new HistoryLogJpaController();
@@ -199,9 +205,6 @@ public class Principal {
                     System.out.println("Escriba la ruta del archivo CSV");
                     fileName = scanner.next();
 
-                    //data set del dispositivo periférico sin etiqueta
-                    List<String[]> matrizPerif = gestionArchivo.getMatrixFromCSV(fileName);
-
                     System.out.println("Escriba los nombres de los elementos de red internos (separados por coma)");
                     String[] eleRedInt = scanner.next().split(",");
 
@@ -217,47 +220,22 @@ public class Principal {
                     hhasta = scanner.next();
                     htimestamp = Timestamp.valueOf(fhasta + " " + hhasta);
 
+                    //SUBMENÚ Seleccione el tipo de operación
+                    System.out.println("Qué tipo de etiqueta desea: (* indica las etiquetas q permiten aplicar algoritmos)");
+                    System.out.println("1. *Mayor Severidad (indica la severidad del evento)");
+                    System.out.println("2. Lista de severidades (se indica todas las severidades de los eventos clasificados en el mismo instante)");
+                    System.out.println("3. *Niveles + Mayor Severidad (indica el nivel donde se produjo el evento y la severidad)");
+                    System.out.println("4. *Nivel cercano + Severidad");
+                    System.out.println("5. *Mayor severidad indicando nivel");
+                    System.out.println("6. Por defecto (EleReN-eventId1|...|EleRedN-eventIdN)");
+                    int label = scanner.nextInt();
+
                     // buscar los eventos de cada uno de los elmentos de red internos
                     desde = Integer.parseInt(String.valueOf(dtimestamp.getTime()).substring(0, 10));
                     hasta = Integer.parseInt(String.valueOf(htimestamp.getTime()).substring(0, 10));
-                    
-                    int numAttr = matrizPerif.get(0).length;
-                    
-                    for (int i = 0; i < eleRedInt.length; i++) {
-                        //List<Events> get event list by host
-                        List<Events> eventIntLst = null;//TODO/////////////////////
-                        //List<String[]> newMatrizPerif = new ArrayList();
-                        for (Events event : eventIntLst) {
-                            //Pasar eel siguiente for a un método y de paramtro pasarle la matriz, ya sea la nueva o la vieja
-                            for (int j = 1; j < matrizPerif.size(); j++) {//desde 1 para no leer el encabezado              
-                                int tPerif = Integer.valueOf(matrizPerif.get(j)[0]);
-                                int tPerifAnterior = 0;
-                                if (j != 1) {
-                                    tPerifAnterior = Integer.valueOf(matrizPerif.get(j - 1)[0]);
-                                }
 
-                                if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
-                                    //matrizPerif.get(j) CLASIFICA EVENTO
-                                    List<String> instancia = Arrays.asList(matrizPerif.get(j));
-                                    if (instancia.size() == numAttr) {
-                                        //Debo agregar la clasee como nuevo String
-                                        instancia.add("EV:" + event.getEventid());
-                                    } else {
-                                        String classs = instancia.get(instancia.size() - 1);
-                                        instancia.remove(instancia.size() - 1);
-                                        instancia.add(classs + "-EV;" + event.getEventid());//LEE PEGO EL OTRO EVENTO
-                                    }
-                                    //remplazar la fila de la matriz por la nueva instancia
-                                    String[] nuevoArray = new String[instancia.size()]; 
-                                    //Aquí convertimos la lista a arreglo nuevamente
-                                    nuevoArray = instancia.toArray(nuevoArray);
-                                    matrizPerif.set(j, nuevoArray); //en caso de q salga error, lo hago con iterator
-                                    break;
-                                }
-                            }
+                    setClassesLabel(fileName, eleRedInt, desde, hasta, label);
 
-                        }
-                    }
                     break;
                 case 6:
                     //TODO agrupar los archivos que contienen los flujos
@@ -280,7 +258,7 @@ public class Principal {
         } while (opc != 9);
 
     }
-  
+
     /**
      * Obtiene funciones por el nombre de host que se escribe como parámetro
      *
@@ -495,7 +473,7 @@ public class Principal {
 
             // convert to TreeSet para que la lista quede ordenada
             TreeSet<Integer> tsHT = new TreeSet<Integer>(hs);
-            
+
             // Armar columnas 
             //for (Integer timestamp : hs) {
             for (Integer timestamp : tsHT) {
@@ -741,27 +719,6 @@ public class Principal {
         return lista;
     }
 
-    /* public static void prueba (){
-         String fileName = "vIOS-Core-I_DataSetSNMP.csv";
-
-        try {
-            FileInputStream fis = new FileInputStream(fileName);
-                InputStreamReader isr = new InputStreamReader(fis,StandardCharsets.UTF_8);
-                CSVReader reader = new CSVReader(isr);
-            String[] nextLine;
-
-            while ((nextLine = reader.readNext()) != null) {
-
-                for (String e : nextLine) {
-                    System.out.format("%s ", e);
-                }
-            }
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }*/
     /**
      *
      * @param matriz
@@ -780,7 +737,7 @@ public class Principal {
 
             File archivo = new File(pathcsv.replaceAll(".csv", "") + "_" + newcolumn + ".csv");
             bw = new BufferedWriter(new FileWriter(archivo));
-            gestionArchivo.leerArchivo(archivo.getName());
+            gestionArchivo.leerArchivo(archivo.getAbsolutePath());//archivo.getName());
             gestionArchivo.escrbir(encabezado.toString(), false);
 
             if (operation == 1) { //suma
@@ -834,5 +791,248 @@ public class Principal {
                 Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
+    }
+
+    /**
+     * Crea las etiquetas para el conjunto de datos SNMP basándose en los
+     * eventos de la lista de elementos de red y el archivo correspondiente al
+     * data set
+     *
+     * @param fileName
+     * @param eleRedInt
+     * @param desde
+     * @param hasta
+     */
+    private static void setClassesLabel(String fileName, String[] eleRedInt, int desde, int hasta, int label) {
+        BufferedWriter bw = null;
+        try {
+            //data set del dispositivo periférico sin etiqueta
+            List<String[]> matrizPerif = gestionArchivo.getMatrixFromCSV(fileName);
+            int numAttr = matrizPerif.get(0).length;
+            for (int i = 0; i < eleRedInt.length; i++) {
+                //List<Events> get event list by host
+                List<Events> eventIntLst = getEventsByHost(eleRedInt[i], desde, hasta);
+
+                //List<String[]> newMatrizPerif = new ArrayList();
+                for (Events event : eventIntLst) {
+                    //Pasar el siguiente for a un método
+                    for (int j = 1; j < matrizPerif.size(); j++) {//desde 1 para no leer el encabezado
+                        int tPerif = Integer.valueOf(matrizPerif.get(j)[0]);
+                        int tPerifAnterior = 0;
+                        if (j != 1) {
+                            tPerifAnterior = Integer.valueOf(matrizPerif.get(j - 1)[0]);
+                        }
+
+                        if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
+                            //matrizPerif.get(j) CLASIFICA EVENTO
+                            List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j)));
+                            if (instancia.size() == numAttr) {
+                                //Debo agregar la clasee como nuevo String
+                                instancia.add(createLabel("", eleRedInt[i], event, label));//eleRedInt[i] + "-" + event.getEventid());
+                                //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
+                            } else {
+                                //System.err.println("--REclasifico evento--");
+                                String classs = instancia.get(instancia.size() - 1);
+                                instancia.remove(instancia.size() - 1);
+                                instancia.add(createLabel(classs, eleRedInt[i], event, label));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
+                            }
+                            //remplazar la fila de la matriz por la nueva instancia
+                            String[] nuevoArray = new String[instancia.size()];
+                            //Aquí convertimos la lista a arreglo nuevamente
+                            nuevoArray = instancia.toArray(nuevoArray);
+                            matrizPerif.set(j, nuevoArray); //en caso de q salga error, lo hago con iterator
+                            break;
+                        }
+                    }
+
+                }
+            }
+
+            //imprimir la matriz en un archivo      
+            File archivo = new File(fileName.replaceAll(".csv", "") + "_Labeled.csv");
+            bw = new BufferedWriter(new FileWriter(archivo));
+
+            gestionArchivo.leerArchivo(archivo.getAbsolutePath());
+
+            StringBuilder headLine = new StringBuilder();
+            for (int i = 0; i < matrizPerif.get(0).length; i++) {
+                headLine.append(matrizPerif.get(0)[i]).append(",");
+            }
+            headLine.append("class");
+            gestionArchivo.escrbir(headLine.toString(), false);
+
+            for (int i = 1; i < matrizPerif.size(); i++) {
+                StringBuilder instanceLine = new StringBuilder();
+                //for (int j = 0; j < matrizPerif.get(i).length; i++) {
+                for (String attribute : matrizPerif.get(i)) {
+                    instanceLine.append(attribute).append(",");
+                }
+                if (matrizPerif.get(0).length == matrizPerif.get(i).length) {//no tiene etiqueta, entonces pongo la coma
+
+                    switch (label) {
+                        case 1: //Mayor Severidad 
+                            instanceLine.append("0,");
+                            break;
+                        case 3: //Niveles + Mayor Severidad
+                            //ETIQUETA; DxAy x->mayor severidad del nivel distribución, y->mayor severidad del nivel de acceso
+                            instanceLine.append("D0A0,");
+                            break;
+                        case 4: //3. Nivel cercano + Mayor severidad del nivel más cercano
+                            //ETIQUETA: Xx, X->D nivel distribución, A nivel acceso; x-> mayor severidad del nivel
+                            instanceLine.append("NE,");
+                            break;
+                        case 5: //Mayor severidad y nivel
+                            instanceLine.append("NE,");
+                            break;
+                        default: // Elem-eventdID|...
+                            instanceLine.append(",");
+                            break;
+                    }
+
+                }
+                gestionArchivo.escrbir(instanceLine.deleteCharAt(instanceLine.length() - 1).toString(), true);
+            }
+
+        } catch (IOException ex) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                bw.close();
+            } catch (IOException ex) {
+                Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+    }
+
+    /**
+     * Obtiene la lista de eventos de un elemento de red por su nombre y un
+     * rango de fecha
+     *
+     * @param eleRedInt
+     * @param desde
+     * @param hasta
+     * @return
+     */
+    private static List<Events> getEventsByHost(String eleRedInt, int desde, int hasta) {
+        List<Functions> lista = functionsJpaController.getFunctionsByHostName(eleRedInt);
+        List<Events> listaE = new ArrayList<>();
+
+        for (Functions f : lista) {
+            listaE.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
+        }
+
+        Collections.sort(listaE, (x, y) -> Integer.valueOf(x.getClock()).compareTo(y.getClock()));
+        /* Collections.sort(listaE, new Comparator<Events>() {
+            @Override
+            public int compare(Events e1, Events e2) {
+                return Integer.valueOf(e1.getClock()).compareTo(Integer.valueOf(e2.getClock()));
+            }
+        });*/
+
+        return listaE;
+    }
+
+    private static String createLabel(String classs, String eleRedInt, Events event, int labelType) {
+        StringBuilder label = new StringBuilder();
+        Triggers trigger = triggersJpaController.getTriggersById(event.getObjectid()).get(0);
+
+        switch (labelType) {
+            case 1: //Mayor Severidad 
+                if (classs != null && !classs.isEmpty()) {
+                    int old_classs = Integer.valueOf(classs);
+                    if (trigger.getPriority() >= old_classs) {
+                        label.append(trigger.getPriority());
+                    } else {
+                        label.append(old_classs);
+                    }
+                } else {
+                    label.append(trigger.getPriority());
+                }
+                break;
+            case 2: //Lista de severidades              
+                label.append(classs).append("|").append(trigger.getPriority());
+                break;
+            case 3: //Niveles + Mayor Severidad
+                //ETIQUETA; DxAy x->mayor severidad del nivel distribución, y->mayor severidad del nivel de acceso
+                if (eleRedInt.contains("Dis")) { //es nivel de distribución
+                    if (classs != null && !classs.isEmpty()) {//ya tenía una clasificación antes
+                        int old_classs = Integer.valueOf(classs.substring(classs.indexOf("D") + 1, classs.indexOf("D") + 2));//.charAt(classs.indexOf("D") + 1));
+                        if (trigger.getPriority() >= old_classs) {
+                            label.append("D").append(trigger.getPriority()).append(classs.substring(classs.indexOf("A"), classs.length()));
+                        } else {
+                            label.append(classs); //no se cambia la etiqueta q tenía
+                        }
+                    } else {//primera vez q se crea la etiqueta
+                        label.append("D").append(trigger.getPriority()).append("A0");
+                    }
+                } else { // es nivel de acceso
+                    if (classs != null && !classs.isEmpty()) {//ya tenía una clasificación antes
+                        int old_classs = Integer.valueOf(classs.substring(classs.indexOf("A") + 1, classs.indexOf("A") + 2));
+                        if (trigger.getPriority() >= old_classs) {
+                            label.append(classs.substring(classs.indexOf("D"), classs.indexOf("A") + 1)).append(trigger.getPriority());
+                        } else {
+                            label.append(classs); //no se cambia la etiqueta q tenía
+                        }
+                    } else {//primera vez q se crea la etiqueta
+                        label.append("D0A").append(trigger.getPriority());
+                    }
+                }
+                break;
+            case 4: //3. Nivel cercano + Mayor severidad del nivel más cercano
+                //ETIQUETA: Xx, X->D nivel distribución, A nivel acceso; x-> mayor severidad del nivel
+                if (eleRedInt.contains("Dis")) { //es nivel de distribución
+                    if (classs != null && !classs.isEmpty()) {
+                        int old_classs = Integer.valueOf(classs.substring(1, 2));
+                        if (trigger.getPriority() >= old_classs) {
+                            label.append("D").append(trigger.getPriority());
+                        } else {
+                            label.append(classs);
+                        }
+                    } else {
+                        label.append("D").append(trigger.getPriority());
+                    }
+                } else if (classs.contains("D")) { // es nivel de acceso pero ya existe una etiqueta de un nivel superior
+                    label.append(classs);
+                } else { // es nivel de acceso y no se ha etiquetado
+                    if (classs != null && !classs.isEmpty()) {
+                        int old_classs = Integer.valueOf(classs.substring(1, 2));
+                        if (trigger.getPriority() >= old_classs) {
+                            label.append("A").append(trigger.getPriority());
+                        } else {
+                            label.append(classs);
+                        }
+                    } else {
+                        label.append("A").append(trigger.getPriority());
+                    }
+                }
+                break;
+            case 5: //Mayor severidad y nivel
+                String level = "A";
+                if (eleRedInt.contains("Dis")) {
+                    level = "D";
+                }
+
+                if (classs != null && !classs.isEmpty()) {
+                    int old_classs = Integer.valueOf(classs.substring(1, 2));
+                    if (trigger.getPriority() > old_classs) {
+                        label.append(level).append(trigger.getPriority());
+                    } else if (trigger.getPriority() == old_classs
+                            && classs.substring(0, 1).equalsIgnoreCase("A")
+                            && level.equalsIgnoreCase("D")) {
+                        label.append(level).append(trigger.getPriority());
+                    } else {
+                        label.append(classs);
+                    }
+                } else {
+                    label.append(level).append(trigger.getPriority());
+                }
+                break;
+            default: // Elem-eventdID|...
+                label.append(classs).append("|").append(eleRedInt).append("-").append(event.getEventid());
+                break;
+        }
+
+        return label.toString();
     }
 }
