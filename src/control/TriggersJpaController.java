@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
 
 /**
  *
@@ -35,4 +36,14 @@ public class TriggersJpaController implements Serializable {
         return emf.createEntityManager();
     }
     
+    public TriggersJpaController() {
+        emf = Persistence.createEntityManagerFactory("ConsultasZabbixPU");
+    }
+    
+    public List<Triggers> getTriggersById(long triggerId){
+        EntityManager em = getEntityManager();     
+        Query q = em.createQuery("SELECT t FROM Triggers t WHERE t.triggerid = :triggerid");
+        q.setParameter("triggerid", triggerId);
+        return q.getResultList();
+    }
 }
