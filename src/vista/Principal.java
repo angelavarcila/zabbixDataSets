@@ -5,6 +5,7 @@
  */
 package vista;
 
+import control.EventRecoveryJpaController;
 import control.EventsJpaController;
 import control.FunctionsJpaController;
 import control.HistoryJpaController;
@@ -31,6 +32,7 @@ import java.util.Scanner;
 import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import model.EventRecovery;
 import model.Events;
 import model.Functions;
 import model.History;
@@ -40,6 +42,7 @@ import model.HistoryText;
 import model.HistoryUint;
 import model.Items;
 import model.Triggers;
+import org.eclipse.persistence.jpa.jpql.parser.ElseExpressionBNF;
 
 /**
  *
@@ -55,6 +58,7 @@ public class Principal {
     private static ItemsJpaController itemsJpaController;
     private static FunctionsJpaController functionsJpaController;
     private static EventsJpaController eventsJpaController;
+    private static EventRecoveryJpaController eventRecoveryJpaController;
     private static TriggersJpaController triggersJpaController;
 
     private static HistoryJpaController historyJpaController;
@@ -67,6 +71,7 @@ public class Principal {
         itemsJpaController = new ItemsJpaController();
         functionsJpaController = new FunctionsJpaController();
         eventsJpaController = new EventsJpaController();
+        eventRecoveryJpaController = new EventRecoveryJpaController();
         triggersJpaController = new TriggersJpaController();
 
         historyJpaController = new HistoryJpaController();
@@ -165,11 +170,25 @@ public class Principal {
                     desde = Integer.parseInt(String.valueOf(dtimestamp.getTime()).substring(0, 10));
                     hasta = Integer.parseInt(String.valueOf(htimestamp.getTime()).substring(0, 10));
 
-                    getDataSetSNMP(host, desde, hasta);
+                    System.out.println("Agrupación de atributos por minuto común");
+                    System.out.println("1. Sí");
+                    System.out.println("2. No");
+                    int agrup = scanner.nextInt();
+
+                    if (agrup == 2) {
+                        getDataSetSNMP(host, desde, hasta);
+                    } else {
+                        Timestamp dtimestamp_agr = Timestamp.valueOf(fdesde + " " + hdesde.substring(0, 6) + "00");//inicio desde el segundo 1
+                        Timestamp htimestamp_agr = Timestamp.valueOf(fhasta + " " + hhasta.substring(0, 6) + "00");
+                        int desde_agr = Integer.parseInt(String.valueOf(dtimestamp_agr.getTime()).substring(0, 10));
+                        int hasta_agr = Integer.parseInt(String.valueOf(htimestamp_agr.getTime()).substring(0, 10));
+
+                        getDataSetSNMPagrup(host, desde_agr, hasta_agr);
+                    }
 
                     break;
                 case 4:
-                    System.out.println("Escriba la ruta del archivo");
+                    System.out.println("Escriba la ruta del conjunto de datos");
                     fileName = scanner.next();
 
                     List<String[]> matriz = gestionArchivo.getMatrixFromCSV(fileName);
@@ -182,7 +201,7 @@ public class Principal {
                     System.out.println("---------------------");
 
                     //SUBMENÚ Seleccione el tipo de operación
-                    System.out.println("Seleccione el tipo de operación que va a realizar");
+                    /*System.out.println("Seleccione el tipo de operación que va a realizar");
                     System.out.println("1. + Suma");
                     System.out.println("2. % Porcentaje");
                     int operation = scanner.nextInt();
@@ -195,9 +214,21 @@ public class Principal {
                     }
 
                     System.out.println("Ingrese el nombre de la columna que se va a crear a partir de la operación");
-                    String newcolumn = scanner.next();
+                    String newcolumn = scanner.next();*/
+                    System.out.println("Escriba la ruta del archivo que contiene la lista de operaciones que va a aplicar");
+                    String fileOperations = scanner.next();
+                    List<String[]> matrizOperations = gestionArchivo.getMatrixFromCSV(fileOperations);
 
-                    executeOperation(matriz, num_clmns_ope, operation, fileName, newcolumn);
+                    for (String[] operation : matrizOperations) {
+                        System.out.println("operation->"+operation[operation.length-1]);
+                        int[] num_clmns_ope = new int[operation.length-2];//menos 2 porque hay dos campos que indican la operacioón a realizar y el nombre de la nueva columna
+                        for (int i = 0; i < operation.length-2; i++) {
+                            num_clmns_ope[i] = Integer.valueOf(operation[i+1]);
+                        }
+                        executeOperation(matriz, num_clmns_ope, Integer.valueOf(operation[0]), fileName, operation[operation.length-1]);
+                        matriz = gestionArchivo.getMatrixFromCSV(fileName); //actualizo la matriz
+                    }
+                    //executeOperation(matriz, num_clmns_ope, operation, fileName, newcolumn);
 
                     break;
                 case 5:
@@ -227,7 +258,9 @@ public class Principal {
                     System.out.println("3. *Niveles + Mayor Severidad (indica el nivel donde se produjo el evento y la severidad)");
                     System.out.println("4. *Nivel cercano + Severidad");
                     System.out.println("5. *Mayor severidad indicando nivel");
-                    System.out.println("6. Por defecto (EleReN-eventId1|...|EleRedN-eventIdN)");
+                    System.out.println("6. BySelf");
+                    System.out.println("7. Por defecto (EleReN-eventId1|...|EleRedN-eventIdN)");
+
                     int label = scanner.nextInt();
 
                     // buscar los eventos de cada uno de los elmentos de red internos
@@ -275,24 +308,31 @@ public class Principal {
             //gestionArchivo = new GestionArchivo();
             gestionArchivo.leerArchivo(archivo.getName());
 
+            //HashSet<Functions> lista = new HashSet();
+            //lista.addAll(functionsJpaController.getFunctionsByHostName(host));
             List<Functions> lista = functionsJpaController.getFunctionsByHostName(host);
             List<Events> listaE = new ArrayList<>();
 
-            String encabezado = "1_event_id,2_event_type,3_event_clock,4_event_ns,5_event_value,6_event_ifrecovery,7_recovery_clock,"
+            String encabezado = "1_event_id,2_event_type,3_event_clock,4_event_ns,5_event_value,6_event_ifrecovery,recovery_id,7_recovery_clock,"
                     + "8_recovery_ns,9_event_duration,10_function_name,11_function_parameter,12_trigger_dscr,13_trigger_expression,"
                     + "14_trigger_flags,15_trigger_priority,16_trigger_type,17_trigger_recovery_mode,18_trigger_recovery_expression,"
                     + "19_item_delay,20_item_name,21_item_type,22_item_value_type,23_item_dscr,24_item_flags,25_item_port,"
                     + "26_item_snmpcommunity,27_item_snmpoid,28_item_units,29_item_history_value";
             gestionArchivo.escrbir(encabezado, false);
-
             for (Functions f : lista) {
-                listaE.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
-                // listaE.addAll(eventsJpaController.getEventsByTriggers(f.getTriggerid().getTriggerid()));
-                for (int i = 0; i < listaE.size(); i++) {
-                    //escriba.toString() = listaE.get(i).getEventid() + "," + listaE.get(i).getObjectid();
-                    gestionArchivo.escrbir(getLineEventInstance(listaE.get(i), f), true);
+                if (!f.getTriggerid().getDescription().contains("Interface Null0")) { //Para ignorar los eventos disparados por interfaces nulas             
+                    listaE.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
+                    // listaE.addAll(eventsJpaController.getEventsByTriggers(f.getTriggerid().getTriggerid()));
+                    for (int i = 0; i < listaE.size(); i++) {
+                        //escriba.toString() = listaE.get(i).getEventid() + "," + listaE.get(i).getObjectid();
+                        //SÓLO ESCRIBIR LA INSTANCIA SI EL EVENTO NO ES DE RECUPERACIÓN
+                        List<EventRecovery> er = eventRecoveryJpaController.getEventRecoveryById(listaE.get(i));
+                        if (er == null || er.isEmpty()) {
+                            gestionArchivo.escrbir(getLineEventInstance(listaE.get(i), f), true);
+                        }
+                    }
+                    listaE.clear();//para no repetir lineas 
                 }
-                listaE.clear();//para no repetir lineas
             }
 
         } catch (IOException ex) {
@@ -477,7 +517,7 @@ public class Principal {
             // Armar columnas 
             //for (Integer timestamp : hs) {
             for (Integer timestamp : tsHT) {
-                gestionArchivo.escrbir(getLineSNMPInstance(listaItems, timestamp), true);
+                gestionArchivo.escrbir(getLineSNMPInstance(listaItems, timestamp, false), true);
             }
         } catch (IOException ex) {
             Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
@@ -487,6 +527,36 @@ public class Principal {
             } catch (IOException ex) {
                 Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
             }
+        }
+    }
+
+    private static void getDataSetSNMPagrup(String host, int desde, int hasta) {
+        try {
+            List<Items> listaItems = itemsJpaController.getItemsByHostName(host);
+
+            StringBuilder encabezado = new StringBuilder("timestamp,");
+            for (Items item : listaItems) {
+                encabezado.append(item.getName().replace(" ", "_")).append(",");
+            }
+            encabezado.deleteCharAt(encabezado.length() - 1);//quito la última coma
+
+            File archivo = new File(host + "_DataSetSNMP.csv");
+
+            BufferedWriter bw = new BufferedWriter(new FileWriter(archivo));
+
+            gestionArchivo.leerArchivo(archivo.getName());
+            gestionArchivo.escrbir(encabezado.toString(), false);
+
+            //long siguiente = desde + 60; //primer rango de búsqueda
+            //hacer un while que haga las búsquedas mientras desde sea menor o igual que hasta
+            while (desde <= hasta) {
+                //System.out.println("desde "+desde+" - hasta "+hasta);
+                gestionArchivo.escrbir(getLineSNMPInstance(listaItems, desde, true), true);
+                desde = desde + 60;
+            }
+
+        } catch (IOException ex) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
@@ -510,6 +580,7 @@ public class Principal {
         //INFORMACIÓN DE RECUPERACIÓN
         if (event.getEventRecovery() != null) {
             escriba.append("1,"); // 1 indica que es un evento que se recuperó
+            escriba.append(event.getEventRecovery().getREventid().getEventid()).append(","); // indica el id del evento de recuperación
             escriba.append(event.getEventRecovery().getREventid().getClock()).append(","); // momento en el que el evento fue recuperado (timestamp)
             escriba.append(event.getEventRecovery().getREventid().getNs()).append(","); // momento en el que el evento fue recuperado (en nanosegundos)
 
@@ -645,44 +716,89 @@ public class Principal {
      * @param timestamp
      * @return
      */
-    private static String getLineSNMPInstance(List<Items> items, int timestamp) {
+    private static String getLineSNMPInstance(List<Items> items, int timestamp, boolean byRange) {
         StringBuilder instance = new StringBuilder();
         instance.append(timestamp).append(",");
-
+        int measuredItems = 0;
         for (Items it : items) {
             switch (it.getValueType()) {
                 case 0: //float
-                    Double valD = historyJpaController.getHistoryValueByItemId(it.getItemid(), timestamp);
+                    Double valD = null;
+                    if (byRange) {
+                        valD = historyJpaController.getHistoryValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    } else {
+                        valD = historyJpaController.getHistoryValueByItemId(it.getItemid(), timestamp);
+                    }
+
                     if (valD != null) {
                         instance.append(valD.toString());
+                        measuredItems = measuredItems + 1;
+                    } else {
+                        instance.append("-1");
                     }
                     instance.append(",");
                     break;
                 case 1: //Str
-                    String valS = historyStrJpaController.getHistoryStrValueByItemId(it.getItemid(), timestamp);
+                    String valS = null;
+                    if (byRange) {
+                        valS = historyStrJpaController.getHistoryStrValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    } else {
+                        valS = historyStrJpaController.getHistoryStrValueByItemId(it.getItemid(), timestamp);
+                    }
+
                     if (valS != null) {
                         instance.append(valS.replaceAll("[\n\r]", " ").replaceAll(",", "-"));
+                        measuredItems = measuredItems + 1;
+                    } else {
+                        instance.append("-1");
                     }
                     instance.append(",");
                     break;
                 case 2: //Log
-                    String valL = historyLogJpaController.getHistoryLogValueByItemId(it.getItemid(), timestamp);
+                    String valL = null;
+                    if (byRange) {
+                        valL = historyLogJpaController.getHistoryLogValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    } else {
+                        valL = historyLogJpaController.getHistoryLogValueByItemId(it.getItemid(), timestamp);
+                    }
+
                     if (valL != null) {
                         instance.append(valL.replaceAll("[\n\r]", " ").replaceAll(",", "-"));
+                        measuredItems = measuredItems + 1;
+                    } else {
+                        instance.append("-1");
                     }
                     instance.append(",");
                     break;
                 case 3: //Uint
-                    Long valI = historyUintJpaController.getHistoryUintValueByItemId(it.getItemid(), timestamp);
+                    Long valI = null;
+                    if (byRange) {
+                        valI = historyUintJpaController.getHistoryUintValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    } else {
+                        valI = historyUintJpaController.getHistoryUintValueByItemId(it.getItemid(), timestamp);
+                    }
+
                     if (valI != null) {
                         instance.append(valI.toString());
+                        measuredItems = measuredItems + 1;
+                    } else {
+                        instance.append("-1");
                     }
                     instance.append(",");
                     break;
                 default: //Text
-                    String valT = historyTextJpaController.getHistoryTextValueByItemId(it.getItemid(), timestamp);
+                    String valT = null;
+                    if (byRange) {
+                        valT = historyTextJpaController.getHistoryTextValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    } else {
+                        valT = historyTextJpaController.getHistoryTextValueByItemId(it.getItemid(), timestamp);
+                    }
+
                     if (valT != null) {
                         instance.append(valT.replaceAll("[\n\r]", " ").replaceAll(",", "-"));
+                        measuredItems = measuredItems + 1;
+                    } else {
+                        instance.append("-1");
                     }
                     instance.append(",");
                     break;
@@ -690,7 +806,13 @@ public class Principal {
         }
         instance.deleteCharAt(instance.length() - 1);//quito la última coma
 
-        return instance.toString();
+        if (measuredItems != 0) {
+            return instance.toString();
+        } else {
+            return "";
+        }
+
+        // return instance.toString();
     }
 
     /**
@@ -735,7 +857,9 @@ public class Principal {
             }
             encabezado.append(newcolumn);
 
-            File archivo = new File(pathcsv.replaceAll(".csv", "") + "_" + newcolumn + ".csv");
+            //File archivo = new File(pathcsv.replaceAll(".csv", "") + "_" + newcolumn + ".csv");
+            File archivo = new File(pathcsv);
+
             bw = new BufferedWriter(new FileWriter(archivo));
             gestionArchivo.leerArchivo(archivo.getAbsolutePath());//archivo.getName());
             gestionArchivo.escrbir(encabezado.toString(), false);
@@ -764,15 +888,16 @@ public class Principal {
             } else if (operation == 2) { //porcentaje
                 for (int i = 1; i < matriz.size(); i++) {
                     String[] row = matriz.get(i);
-                    int suma_unos = 0;
+                    float suma_unos = 0;
                     for (int j = 0; j < num_clmns_ope.length; j++) {
                         int indexAttr = num_clmns_ope[j];
-                        //////Este if es temporal, los datos q voy a recoger despues se van a tomar al tiempo, entonces no voy a tener espacios vacíos.
-                        if (!row[indexAttr].isEmpty()) {
-                            suma_unos = suma_unos + Integer.valueOf(row[indexAttr]);
+                        if (!row[indexAttr].isEmpty() && Integer.valueOf(row[indexAttr]) != -1) { //se suma si el valor del estado operativo no es vacío ni -1
+                            suma_unos = suma_unos + Float.valueOf(row[indexAttr]);
                         }//////////////////////////////////////
                     }
-                    long resultado = suma_unos / num_clmns_ope.length;
+                    float resultado = suma_unos / num_clmns_ope.length;
+                    
+                    System.out.println("porcentaje->"+suma_unos+" / "+num_clmns_ope.length+" = "+resultado);
                     //imprimo instancia resultante en archivo
                     StringBuilder instancia = new StringBuilder();
                     for (int j = 0; j < row.length; j++) {
@@ -812,7 +937,7 @@ public class Principal {
             for (int i = 0; i < eleRedInt.length; i++) {
                 //List<Events> get event list by host
                 List<Events> eventIntLst = getEventsByHost(eleRedInt[i], desde, hasta);
-
+                System.out.println("tamaño eventos: " + eventIntLst.size());
                 //List<String[]> newMatrizPerif = new ArrayList();
                 for (Events event : eventIntLst) {
                     //Pasar el siguiente for a un método
@@ -822,26 +947,49 @@ public class Principal {
                         if (j != 1) {
                             tPerifAnterior = Integer.valueOf(matrizPerif.get(j - 1)[0]);
                         }
+                        if (label != 6) {//Código chambón, arreglarlo mñas bonito
 
-                        if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
-                            //matrizPerif.get(j) CLASIFICA EVENTO
-                            List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j)));
-                            if (instancia.size() == numAttr) {
-                                //Debo agregar la clasee como nuevo String
-                                instancia.add(createLabel("", eleRedInt[i], event, label));//eleRedInt[i] + "-" + event.getEventid());
-                                //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
-                            } else {
-                                //System.err.println("--REclasifico evento--");
-                                String classs = instancia.get(instancia.size() - 1);
-                                instancia.remove(instancia.size() - 1);
-                                instancia.add(createLabel(classs, eleRedInt[i], event, label));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
+                            if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
+                                //matrizPerif.get(j-1) CLASIFICA EVENTO
+                                List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j - 1)));
+                                if (instancia.size() == numAttr) {
+                                    //Debo agregar la clasee como nuevo String
+                                    instancia.add(createLabel("", eleRedInt[i], event, label));//eleRedInt[i] + "-" + event.getEventid());
+                                    //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
+                                } else {
+                                    //System.err.println("--REclasifico evento--");
+                                    String classs = instancia.get(instancia.size() - 1);
+                                    instancia.remove(instancia.size() - 1);
+                                    instancia.add(createLabel(classs, eleRedInt[i], event, label));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
+                                }
+                                //remplazar la fila de la matriz por la nueva instancia
+                                String[] nuevoArray = new String[instancia.size()];
+                                //Aquí convertimos la lista a arreglo nuevamente
+                                nuevoArray = instancia.toArray(nuevoArray);
+                                matrizPerif.set(j - 1, nuevoArray); //en caso de q salga error, lo hago con iterator
+                                break;
                             }
-                            //remplazar la fila de la matriz por la nueva instancia
-                            String[] nuevoArray = new String[instancia.size()];
-                            //Aquí convertimos la lista a arreglo nuevamente
-                            nuevoArray = instancia.toArray(nuevoArray);
-                            matrizPerif.set(j, nuevoArray); //en caso de q salga error, lo hago con iterator
-                            break;
+                        } else {//Codigo chambón
+                            if (tPerifAnterior != 0 && (tPerif == event.getClock() || (tPerifAnterior < event.getClock() && tPerif > event.getClock()))) {
+                                //matrizPerif.get(j-1) CLASIFICA EVENTO
+                                List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j - 1)));
+                                if (instancia.size() == numAttr) {
+                                    //Debo agregar la clasee como nuevo String
+                                    instancia.add(createLabel("", eleRedInt[i], event, 5));//eleRedInt[i] + "-" + event.getEventid());
+                                    //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
+                                } else {
+                                    //System.err.println("--REclasifico evento--");
+                                    String classs = instancia.get(instancia.size() - 1);
+                                    instancia.remove(instancia.size() - 1);
+                                    instancia.add(createLabel(classs, eleRedInt[i], event, 5));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
+                                }
+                                //remplazar la fila de la matriz por la nueva instancia
+                                String[] nuevoArray = new String[instancia.size()];
+                                //Aquí convertimos la lista a arreglo nuevamente
+                                nuevoArray = instancia.toArray(nuevoArray);
+                                matrizPerif.set(j - 1, nuevoArray); //en caso de q salga error, lo hago con iterator
+                                break;
+                            }
                         }
                     }
 
@@ -882,6 +1030,9 @@ public class Principal {
                             instanceLine.append("NE,");
                             break;
                         case 5: //Mayor severidad y nivel
+                            instanceLine.append("NE,");
+                            break;
+                        case 6: //Mayor severidad y nivel
                             instanceLine.append("NE,");
                             break;
                         default: // Elem-eventdID|...

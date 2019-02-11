@@ -195,4 +195,19 @@ public class HistoryLogJpaController implements Serializable {
         }
     }
     
+    public String getHistoryLogValueByItemIdAndRange(Long itemid, int clockI, int clockF) {
+        EntityManager em = getEntityManager();
+        Query q = em.createQuery("SELECT h FROM HistoryLog h WHERE h.historyLogPK.itemid = :itemid AND h.historyLogPK.clock BETWEEN :clockI and :clockF");
+        q.setParameter("itemid", itemid);
+        q.setParameter("clockI", clockI);
+        q.setParameter("clockF", clockF);
+        
+        if(q.getResultList()!=null && !q.getResultList().isEmpty()){
+            HistoryLog h = (HistoryLog) q.getResultList().get(0);
+            return h.getValue();
+        }else{
+            return null;
+        }
+    }
+    
 }

@@ -195,4 +195,19 @@ public class HistoryStrJpaController implements Serializable {
         }
     }
     
+    public String getHistoryStrValueByItemIdAndRange(Long itemid, int clockI, int clockF) {
+        EntityManager em = getEntityManager();
+        Query q = em.createQuery("SELECT h FROM HistoryStr h WHERE h.historyStrPK.itemid = :itemid AND h.historyStrPK.clock BETWEEN :clockI AND :clockF");
+        q.setParameter("itemid", itemid);
+        q.setParameter("clockI", clockI);
+        q.setParameter("clockF", clockF);
+      
+        if(q.getResultList()!=null && !q.getResultList().isEmpty()){
+            HistoryStr h = (HistoryStr) q.getResultList().get(0);
+            return h.getValue();
+        }else{
+            return null;
+        }
+    }
+    
 }

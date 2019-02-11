@@ -59,21 +59,23 @@ public class GestionArchivo {
 
     public void escrbir(String datos, boolean aniadeTexto) {
         try {
-            if (aniadeTexto) {
-                writer = new FileWriter(file, true);
-            } else {
-                writer = new FileWriter(file);
-            }
-            BufferedWriter bw = new BufferedWriter(writer);
-            PrintWriter salida = new PrintWriter(bw);
+            if (datos != null && !datos.isEmpty()) {
+                if (aniadeTexto) {
+                    writer = new FileWriter(file, true);
+                } else {
+                    writer = new FileWriter(file);
+                }
+                BufferedWriter bw = new BufferedWriter(writer);
+                PrintWriter salida = new PrintWriter(bw);
 
-            if (aniadeTexto) {
-                salida.write("\n" + datos);
-            } else {
-                salida.write(datos);
+                if (aniadeTexto) {
+                    salida.write("\n" + datos);
+                } else {
+                    salida.write(datos);
+                }
+                salida.close();
+                bw.close();
             }
-            salida.close();
-            bw.close();
         } catch (IOException ex) {
             Logger.getLogger(GestionArchivo.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -93,7 +95,7 @@ public class GestionArchivo {
                 matrix.add(instancia);
             }
             //close the file   
-            bufRdr.close();    
+            bufRdr.close();
         } catch (FileNotFoundException ex) {
             Logger.getLogger(GestionArchivo.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {

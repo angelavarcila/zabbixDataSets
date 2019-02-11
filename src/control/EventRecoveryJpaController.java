@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
 import model.EventRecovery;
 
 /**
@@ -33,6 +34,10 @@ public class EventRecoveryJpaController implements Serializable {
 
     public EntityManager getEntityManager() {
         return emf.createEntityManager();
+    }
+    
+    public EventRecoveryJpaController() {
+        emf = Persistence.createEntityManagerFactory("ConsultasZabbixPU");
     }
 
     public void create(EventRecovery eventRecovery) throws IllegalOrphanException, PreexistingEntityException, Exception {
@@ -283,6 +288,13 @@ public class EventRecoveryJpaController implements Serializable {
         } finally {
             em.close();
         }
+    }
+    
+     public List<EventRecovery> getEventRecoveryById(Events recoveryEvent){
+        EntityManager em = getEntityManager();
+        Query q = em.createQuery("SELECT r FROM EventRecovery r WHERE r.rEventid = :rEvent");
+        q.setParameter("rEvent", recoveryEvent);
+        return q.getResultList();
     }
     
 }
