@@ -21,11 +21,11 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Timestamp;
-import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
-import java.util.Comparator;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
@@ -42,7 +42,6 @@ import model.HistoryText;
 import model.HistoryUint;
 import model.Items;
 import model.Triggers;
-import org.eclipse.persistence.jpa.jpql.parser.ElseExpressionBNF;
 
 /**
  *
@@ -220,12 +219,12 @@ public class Principal {
                     List<String[]> matrizOperations = gestionArchivo.getMatrixFromCSV(fileOperations);
 
                     for (String[] operation : matrizOperations) {
-                        System.out.println("operation->"+operation[operation.length-1]);
-                        int[] num_clmns_ope = new int[operation.length-2];//menos 2 porque hay dos campos que indican la operacioón a realizar y el nombre de la nueva columna
-                        for (int i = 0; i < operation.length-2; i++) {
-                            num_clmns_ope[i] = Integer.valueOf(operation[i+1]);
+                        System.out.println("operation->" + operation[operation.length - 1]);
+                        int[] num_clmns_ope = new int[operation.length - 2];//menos 2 porque hay dos campos que indican la operacioón a realizar y el nombre de la nueva columna
+                        for (int i = 0; i < operation.length - 2; i++) {
+                            num_clmns_ope[i] = Integer.valueOf(operation[i + 1]);
                         }
-                        executeOperation(matriz, num_clmns_ope, Integer.valueOf(operation[0]), fileName, operation[operation.length-1]);
+                        executeOperation(matriz, num_clmns_ope, Integer.valueOf(operation[0]), fileName, operation[operation.length - 1]);
                         matriz = gestionArchivo.getMatrixFromCSV(fileName); //actualizo la matriz
                     }
                     //executeOperation(matriz, num_clmns_ope, operation, fileName, newcolumn);
@@ -258,7 +257,7 @@ public class Principal {
                     System.out.println("3. *Niveles + Mayor Severidad (indica el nivel donde se produjo el evento y la severidad)");
                     System.out.println("4. *Nivel cercano + Severidad");
                     System.out.println("5. *Mayor severidad indicando nivel");
-                    System.out.println("6. BySelf");
+                    System.out.println("6. *BySelf");
                     System.out.println("7. Por defecto (EleReN-eventId1|...|EleRedN-eventIdN)");
 
                     int label = scanner.nextInt();
@@ -896,8 +895,8 @@ public class Principal {
                         }//////////////////////////////////////
                     }
                     float resultado = suma_unos / num_clmns_ope.length;
-                    
-                    System.out.println("porcentaje->"+suma_unos+" / "+num_clmns_ope.length+" = "+resultado);
+
+                    System.out.println("porcentaje->" + suma_unos + " / " + num_clmns_ope.length + " = " + resultado);
                     //imprimo instancia resultante en archivo
                     StringBuilder instancia = new StringBuilder();
                     for (int j = 0; j < row.length; j++) {
@@ -931,45 +930,79 @@ public class Principal {
     private static void setClassesLabel(String fileName, String[] eleRedInt, int desde, int hasta, int label) {
         BufferedWriter bw = null;
         try {
+
+            if (label == 6) {
+                label = 5;
+            }
+
             //data set del dispositivo periférico sin etiqueta
             List<String[]> matrizPerif = gestionArchivo.getMatrixFromCSV(fileName);
             int numAttr = matrizPerif.get(0).length;
             for (int i = 0; i < eleRedInt.length; i++) {
                 //List<Events> get event list by host
                 List<Events> eventIntLst = getEventsByHost(eleRedInt[i], desde, hasta);
-                System.out.println("tamaño eventos: " + eventIntLst.size());
+
                 //List<String[]> newMatrizPerif = new ArrayList();
                 for (Events event : eventIntLst) {
                     //Pasar el siguiente for a un método
                     for (int j = 1; j < matrizPerif.size(); j++) {//desde 1 para no leer el encabezado
+                        // Los tiempos que vienen en la matriz ya tienen una granularidad por minuto
+                        
                         int tPerif = Integer.valueOf(matrizPerif.get(j)[0]);
                         int tPerifAnterior = 0;
                         if (j != 1) {
                             tPerifAnterior = Integer.valueOf(matrizPerif.get(j - 1)[0]);
                         }
-                        if (label != 6) {//Código chambón, arreglarlo mñas bonito
+                        //if (label != 6) {//Código chambón, arreglarlo mñas bonito
+                        //int tEvent = event.getClock();
+                        //Granularidad por minuto para el timestamp de los eventos
+                        Calendar c = Calendar.getInstance();
+                        c.setTime(new Date(Long.valueOf(event.getClock()) * 1000));
+                        c.set(Calendar.SECOND, 0);
 
-                            if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
-                                //matrizPerif.get(j-1) CLASIFICA EVENTO
-                                List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j - 1)));
-                                if (instancia.size() == numAttr) {
-                                    //Debo agregar la clasee como nuevo String
-                                    instancia.add(createLabel("", eleRedInt[i], event, label));//eleRedInt[i] + "-" + event.getEventid());
-                                    //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
-                                } else {
-                                    //System.err.println("--REclasifico evento--");
-                                    String classs = instancia.get(instancia.size() - 1);
-                                    instancia.remove(instancia.size() - 1);
-                                    instancia.add(createLabel(classs, eleRedInt[i], event, label));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
-                                }
-                                //remplazar la fila de la matriz por la nueva instancia
-                                String[] nuevoArray = new String[instancia.size()];
-                                //Aquí convertimos la lista a arreglo nuevamente
-                                nuevoArray = instancia.toArray(nuevoArray);
-                                matrizPerif.set(j - 1, nuevoArray); //en caso de q salga error, lo hago con iterator
-                                break;
+                        long tEvent = c.getTimeInMillis() / 1000;
+
+                        //if (tPerifAnterior != 0 && tPerifAnterior < event.getClock() && tPerif > event.getClock()) {
+                        if (tPerifAnterior != 0 && tPerifAnterior < tEvent && (tPerif == tEvent || tPerif > tEvent)) {
+                            //matrizPerif.get(j) CLASIFICA EVENTO
+                            /*List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j)));//get(j - 1)));
+                            if (instancia.size() == numAttr) {
+                                //Debo agregar la clasee como nuevo String
+                                instancia.add(createLabel("", eleRedInt[i], event, label));//eleRedInt[i] + "-" + event.getEventid());
+                                //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
+                            } else {
+                                //System.err.println("--REclasifico evento--");
+                                String classs = instancia.get(instancia.size() - 1);
+                                instancia.remove(instancia.size() - 1);
+                                instancia.add(createLabel(classs, eleRedInt[i], event, label));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
                             }
-                        } else {//Codigo chambón
+                            //remplazar la fila de la matriz por la nueva instancia
+                            String[] nuevoArray = new String[instancia.size()];
+                            //Aquí convertimos la lista a arreglo nuevamente
+                            nuevoArray = instancia.toArray(nuevoArray);
+                            matrizPerif.set(j, nuevoArray);//j - 1, nuevoArray); //en caso de q salga error, lo hago con iterator*/
+
+                            //CLASIFICO EVENTO EN LA INSTANCIA CORRESPONDIENTE
+                            matrizPerif.set(j, getClassifiedInstance(numAttr, label, event, eleRedInt[i], matrizPerif.get(j)));
+
+                            //CLASIFICO EVENTO EN LAS INSTANCIAS CORRESPONDIENTES A SU DURACIÓN
+                            int tRecup = event.getEventRecovery().getREventid().getClock();
+                            int instanciaPosterior = j + 1;
+                            int tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);//timestamp de instancia posterior
+                            while (tRecup >= tPerifPosterior) {
+                                //creo etiqueta
+                                matrizPerif.set(instanciaPosterior, getClassifiedInstance(numAttr, label, event, eleRedInt[i], matrizPerif.get(instanciaPosterior)));
+                                //actualizo banderas
+                                instanciaPosterior = instanciaPosterior + 1;
+                                if (instanciaPosterior < matrizPerif.size()) {
+                                    tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);
+                                } else {
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        /*} else {//Codigo chambón
                             if (tPerifAnterior != 0 && (tPerif == event.getClock() || (tPerifAnterior < event.getClock() && tPerif > event.getClock()))) {
                                 //matrizPerif.get(j-1) CLASIFICA EVENTO
                                 List<String> instancia = new ArrayList<String>(Arrays.asList(matrizPerif.get(j - 1)));
@@ -990,12 +1023,11 @@ public class Principal {
                                 matrizPerif.set(j - 1, nuevoArray); //en caso de q salga error, lo hago con iterator
                                 break;
                             }
-                        }
+                        }*/
                     }
 
                 }
             }
-
             //imprimir la matriz en un archivo      
             File archivo = new File(fileName.replaceAll(".csv", "") + "_Labeled.csv");
             bw = new BufferedWriter(new FileWriter(archivo));
@@ -1056,6 +1088,27 @@ public class Principal {
 
     }
 
+    private static String[] getClassifiedInstance(int numAttr, int label, Events event, String nombreEleRed, String[] instanciaArray) {
+        List<String> instancia = new ArrayList<>(Arrays.asList(instanciaArray));//matrizPerif.get(j)));//get(j - 1)));
+        
+        if (instancia.size() == numAttr) {
+            //Debo agregar la clasee como nuevo String
+            instancia.add(createLabel("", nombreEleRed, event, label));//eleRedInt[i] + "-" + event.getEventid());
+            //System.err.println(event.getEventid()+"-"+j+"--clasifico evento-->"+tPerifAnterior+"-"+event.getClock()+"-"+tPerif);
+        } else {
+            //System.err.println("--REclasifico evento--");
+            String classs = instancia.get(instancia.size() - 1);
+            instancia.remove(instancia.size() - 1);
+            instancia.add(createLabel(classs, nombreEleRed, event, label));//classs + "|"+eleRedInt[i] + "-" + event.getEventid());//LEE PEGO EL OTRO EVENTO
+        }
+        //remplazar la fila de la matriz por la nueva instancia
+        String[] nuevoArray = new String[instancia.size()];
+        //Aquí convertimos la lista a arreglo nuevamente
+        nuevoArray = instancia.toArray(nuevoArray);
+
+        return nuevoArray;
+    }
+
     /**
      * Obtiene la lista de eventos de un elemento de red por su nombre y un
      * rango de fecha
@@ -1067,19 +1120,25 @@ public class Principal {
      */
     private static List<Events> getEventsByHost(String eleRedInt, int desde, int hasta) {
         List<Functions> lista = functionsJpaController.getFunctionsByHostName(eleRedInt);
+        List<Events> listaETemporal = new ArrayList<>();
         List<Events> listaE = new ArrayList<>();
 
         for (Functions f : lista) {
-            listaE.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
+
+            if (!f.getTriggerid().getDescription().contains("Interface Null0")) { //Para ignorar los eventos disparados por interfaces nulas     
+                listaETemporal.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
+            }
+
+            //SÓLO AGREGAR EL EVENTO SI NO ES DE RECUPERACIÓN
+            for (int i = 0; i < listaETemporal.size(); i++) {
+                List<EventRecovery> er = eventRecoveryJpaController.getEventRecoveryById(listaETemporal.get(i));
+                if (er == null || er.isEmpty()) {
+                    listaE.add(listaETemporal.get(i));
+                }
+            }
         }
 
         Collections.sort(listaE, (x, y) -> Integer.valueOf(x.getClock()).compareTo(y.getClock()));
-        /* Collections.sort(listaE, new Comparator<Events>() {
-            @Override
-            public int compare(Events e1, Events e2) {
-                return Integer.valueOf(e1.getClock()).compareTo(Integer.valueOf(e2.getClock()));
-            }
-        });*/
 
         return listaE;
     }
@@ -1158,12 +1217,11 @@ public class Principal {
                     }
                 }
                 break;
-            case 5: //Mayor severidad y nivel
+            case 5: //Mayor severidad indicando nivel
                 String level = "A";
                 if (eleRedInt.contains("Dis")) {
                     level = "D";
                 }
-
                 if (classs != null && !classs.isEmpty()) {
                     int old_classs = Integer.valueOf(classs.substring(1, 2));
                     if (trigger.getPriority() > old_classs) {
