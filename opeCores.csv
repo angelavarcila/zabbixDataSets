@@ -1,0 +1,7 @@
+1,8,9,IN_Inbound_packets_discarded
+1,15,16,IN_Inbound_packets_with_errors
+1,22,23,IN_Bits_received
+1,29,30,IN_Outbound_packets_discarded
+1,36,37,IN_Outbound_packets_with_errors
+1,43,44,IN_Bits_sent
+2,57,58,IN_Operational_status

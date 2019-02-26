@@ -319,7 +319,9 @@ public class Principal {
                     + "26_item_snmpcommunity,27_item_snmpoid,28_item_units,29_item_history_value";
             gestionArchivo.escrbir(encabezado, false);
             for (Functions f : lista) {
-                if (!f.getTriggerid().getDescription().contains("Interface Null0")) { //Para ignorar los eventos disparados por interfaces nulas             
+                if (!f.getTriggerid().getDescription().contains("Interface Null0")
+                        && !f.getTriggerid().getDescription().contains("Interface Management")
+                        && !f.getTriggerid().getDescription().contains("Interface Vlan")) { //Para ignorar los eventos disparados por interfaces nulas             
                     listaE.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
                     // listaE.addAll(eventsJpaController.getEventsByTriggers(f.getTriggerid().getTriggerid()));
                     for (int i = 0; i < listaE.size(); i++) {
@@ -947,7 +949,7 @@ public class Principal {
                     //Pasar el siguiente for a un método
                     for (int j = 1; j < matrizPerif.size(); j++) {//desde 1 para no leer el encabezado
                         // Los tiempos que vienen en la matriz ya tienen una granularidad por minuto
-                        
+
                         int tPerif = Integer.valueOf(matrizPerif.get(j)[0]);
                         int tPerifAnterior = 0;
                         if (j != 1) {
@@ -986,18 +988,22 @@ public class Principal {
                             matrizPerif.set(j, getClassifiedInstance(numAttr, label, event, eleRedInt[i], matrizPerif.get(j)));
 
                             //CLASIFICO EVENTO EN LAS INSTANCIAS CORRESPONDIENTES A SU DURACIÓN
-                            int tRecup = event.getEventRecovery().getREventid().getClock();
+                            int tRecup = 0;
                             int instanciaPosterior = j + 1;
-                            int tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);//timestamp de instancia posterior
-                            while (tRecup >= tPerifPosterior) {
-                                //creo etiqueta
-                                matrizPerif.set(instanciaPosterior, getClassifiedInstance(numAttr, label, event, eleRedInt[i], matrizPerif.get(instanciaPosterior)));
-                                //actualizo banderas
-                                instanciaPosterior = instanciaPosterior + 1;
-                                if (instanciaPosterior < matrizPerif.size()) {
-                                    tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);
-                                } else {
-                                    break;
+
+                            if (event.getEventRecovery() != null && instanciaPosterior < matrizPerif.size()) {
+                                tRecup = event.getEventRecovery().getREventid().getClock();
+                                int tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);//timestamp de instancia posterior
+                                while (tRecup >= tPerifPosterior) {
+                                    //creo etiqueta
+                                    matrizPerif.set(instanciaPosterior, getClassifiedInstance(numAttr, label, event, eleRedInt[i], matrizPerif.get(instanciaPosterior)));
+                                    //actualizo banderas
+                                    instanciaPosterior = instanciaPosterior + 1;
+                                    if (instanciaPosterior < matrizPerif.size()) {
+                                        tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);
+                                    } else {
+                                        break;
+                                    }
                                 }
                             }
                             break;
@@ -1078,6 +1084,8 @@ public class Principal {
 
         } catch (IOException ex) {
             Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception e) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, e);
         } finally {
             try {
                 bw.close();
@@ -1090,7 +1098,7 @@ public class Principal {
 
     private static String[] getClassifiedInstance(int numAttr, int label, Events event, String nombreEleRed, String[] instanciaArray) {
         List<String> instancia = new ArrayList<>(Arrays.asList(instanciaArray));//matrizPerif.get(j)));//get(j - 1)));
-        
+
         if (instancia.size() == numAttr) {
             //Debo agregar la clasee como nuevo String
             instancia.add(createLabel("", nombreEleRed, event, label));//eleRedInt[i] + "-" + event.getEventid());
@@ -1125,15 +1133,18 @@ public class Principal {
 
         for (Functions f : lista) {
 
-            if (!f.getTriggerid().getDescription().contains("Interface Null0")) { //Para ignorar los eventos disparados por interfaces nulas     
+            if (!f.getTriggerid().getDescription().contains("Interface Null0")
+                   && !f.getTriggerid().getDescription().contains("Interface Management")
+                   && !f.getTriggerid().getDescription().contains("Interface Vlan")) { //Para ignorar los eventos disparados por interfaces nulas     
                 listaETemporal.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
-            }
+            //}
 
-            //SÓLO AGREGAR EL EVENTO SI NO ES DE RECUPERACIÓN
-            for (int i = 0; i < listaETemporal.size(); i++) {
-                List<EventRecovery> er = eventRecoveryJpaController.getEventRecoveryById(listaETemporal.get(i));
-                if (er == null || er.isEmpty()) {
-                    listaE.add(listaETemporal.get(i));
+                //SÓLO AGREGAR EL EVENTO SI NO ES DE RECUPERACIÓN
+                for (int i = 0; i < listaETemporal.size(); i++) {
+                    List<EventRecovery> er = eventRecoveryJpaController.getEventRecoveryById(listaETemporal.get(i));
+                    if (er == null || er.isEmpty()) {
+                        listaE.add(listaETemporal.get(i));
+                    }
                 }
             }
         }
