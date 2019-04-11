@@ -91,9 +91,12 @@ public class Principal {
         String fileName;
         int desde;
         int hasta;
+        int maxParamWithValue;
 
         Timestamp dtimestamp;
         Timestamp htimestamp;
+
+        List<String[]> matriz;
 
         int opc;
         do {
@@ -103,6 +106,8 @@ public class Principal {
             System.out.println("3. Generar data set (sólo información SNMP)");
             System.out.println("4. Operaciones con columnas");
             System.out.println("5. Generar etiqueta");
+            System.out.println("6. Agrupamiento de instancias");
+            System.out.println("7. Obtener eventos por host con timestamp a partir de distribución de parámetros");
             System.out.println("9. Salir");
             opc = scanner.nextInt();
 
@@ -182,7 +187,7 @@ public class Principal {
                         int desde_agr = Integer.parseInt(String.valueOf(dtimestamp_agr.getTime()).substring(0, 10));
                         int hasta_agr = Integer.parseInt(String.valueOf(htimestamp_agr.getTime()).substring(0, 10));
 
-                        getDataSetSNMPagrup(host, desde_agr, hasta_agr);
+                        getDataSetSNMPagrup(host, desde_agr, hasta_agr, true, null);
                     }
 
                     break;
@@ -190,7 +195,7 @@ public class Principal {
                     System.out.println("Escriba la ruta del conjunto de datos");
                     fileName = scanner.next();
 
-                    List<String[]> matriz = gestionArchivo.getMatrixFromCSV(fileName);
+                    matriz = gestionArchivo.getMatrixFromCSV(fileName);
 
                     //Sacar la lista de atributos con el index como selección
                     System.out.println("---------------------");
@@ -219,7 +224,6 @@ public class Principal {
                     List<String[]> matrizOperations = gestionArchivo.getMatrixFromCSV(fileOperations);
 
                     for (String[] operation : matrizOperations) {
-                        System.out.println("operation->" + operation[operation.length - 1]);
                         int[] num_clmns_ope = new int[operation.length - 2];//menos 2 porque hay dos campos que indican la operacioón a realizar y el nombre de la nueva columna
                         for (int i = 0; i < operation.length - 2; i++) {
                             num_clmns_ope[i] = Integer.valueOf(operation[i + 1]);
@@ -232,23 +236,14 @@ public class Principal {
                     break;
                 case 5:
                     //GENERAR ETIQUETA
-                    System.out.println("Escriba la ruta del archivo CSV");
+                    System.out.println("Escriba la ruta del archivo CSV a etiquetar");
                     fileName = scanner.next();
 
-                    System.out.println("Escriba los nombres de los elementos de red internos (separados por coma)");
-                    String[] eleRedInt = scanner.next().split(",");
+                    System.out.println("Cómo desea etiquetar el conjunto de datos?");
+                    System.out.println("1. Por medio de los eventos almacenados en la base de datos (tiene en cuenta el timestamp del evento con granularidad por minuto)");
+                    System.out.println("2. Por medio de un archivo que contiene la lista de eventos (cada evento indica el timestamp de acuerdo a la distribución de los parñametros a los que pertenece)");
 
-                    System.out.println("Fecha Desde: yyyy-MM-dd");
-                    fdesde = scanner.next();
-                    System.out.println("Hora Desde: hh:mm:ss");
-                    hdesde = scanner.next();
-                    dtimestamp = Timestamp.valueOf(fdesde + " " + hdesde);
-
-                    System.out.println("Fecha Hasta: yyyy-MM-dd");
-                    fhasta = scanner.next();
-                    System.out.println("Hora Hasta: formato: hh:mm:ss");
-                    hhasta = scanner.next();
-                    htimestamp = Timestamp.valueOf(fhasta + " " + hhasta);
+                    int labelingMod = scanner.nextInt();
 
                     //SUBMENÚ Seleccione el tipo de operación
                     System.out.println("Qué tipo de etiqueta desea: (* indica las etiquetas q permiten aplicar algoritmos)");
@@ -259,26 +254,76 @@ public class Principal {
                     System.out.println("5. *Mayor severidad indicando nivel");
                     System.out.println("6. *BySelf");
                     System.out.println("7. Por defecto (EleReN-eventId1|...|EleRedN-eventIdN)");
-
+                    
                     int label = scanner.nextInt();
+                    
+                    if(labelingMod == 1){
+                        System.out.println("Escriba los nombres de los elementos de red internos (separados por coma)");
+                        String[] eleRedInt = scanner.next().split(",");
 
-                    // buscar los eventos de cada uno de los elmentos de red internos
-                    desde = Integer.parseInt(String.valueOf(dtimestamp.getTime()).substring(0, 10));
-                    hasta = Integer.parseInt(String.valueOf(htimestamp.getTime()).substring(0, 10));
+                        System.out.println("Fecha Desde: yyyy-MM-dd");
+                        fdesde = scanner.next();
+                        System.out.println("Hora Desde: hh:mm:ss");
+                        hdesde = scanner.next();
+                        dtimestamp = Timestamp.valueOf(fdesde + " " + hdesde);
 
-                    setClassesLabel(fileName, eleRedInt, desde, hasta, label);
+                        System.out.println("Fecha Hasta: yyyy-MM-dd");
+                        fhasta = scanner.next();
+                        System.out.println("Hora Hasta: formato: hh:mm:ss");
+                        hhasta = scanner.next();
+                        htimestamp = Timestamp.valueOf(fhasta + " " + hhasta);
+                        
+                         // buscar los eventos de cada uno de los elmentos de red internos
+                        desde = Integer.parseInt(String.valueOf(dtimestamp.getTime()).substring(0, 10));
+                        hasta = Integer.parseInt(String.valueOf(htimestamp.getTime()).substring(0, 10));
 
+                        setClassesLabel(fileName, eleRedInt, desde, hasta, label);
+                    }else{
+                        System.out.println("Escriba las rutas de los archivo CSV que contienen la lista de eventos (separadas por coma)");
+                        String[] eventFiles = scanner.next().split(",");
+                        
+                        setClassesLabelByFiles(fileName, eventFiles, label);
+                        
+                    }
+ 
                     break;
                 case 6:
-                    //TODO agrupar los archivos que contienen los flujos
-                    String filesPath = "/home/angela/nProbe";
+                    System.out.println("Escriba la ruta del conjunto de datos");
+                    fileName = scanner.next();
 
-                    //leer la fecha de inicio y fin (año/mes/día)
-                    System.out.println("Fecha Desde: yyyy/MM/dd");
-                    fdesde = scanner.next();
+                    System.out.println("Cuál es el elemento de red al que pertenece este conjunto de datos?");
+                    host = scanner.next();
 
-                    System.out.println("Fecha Hasta: yyyy/MM/dd");
-                    fhasta = scanner.next();
+                    System.out.println("Cuál es el número máximo de parámetros que pueden tener un valor?");
+                    maxParamWithValue = scanner.nextInt();
+
+                    System.out.println("Cómo desea determinar el timestamp de una instancia?");
+                    System.out.println("1. Tiempo con granularidad por minuto y detectado con tercer cuartil");
+                    System.out.println("2. Tiempo con granularidad por segundo y detectado con tercer cuartil");
+
+                    int granularidadTimestamp = scanner.nextInt();
+
+                    matriz = gestionArchivo.getMatrixFromCSV(fileName);
+
+                    List<List<String>> rangos = getRangesFromMatrix(matriz, maxParamWithValue, granularidadTimestamp);
+
+                    getDataSetSNMPagrup(host, 0, 0, false, rangos);
+
+                    break;
+                case 7:
+                    System.out.println("Escriba la ruta del conjunto de datos (data set SNMP sin agrupamiento por tiempo)");
+                    fileName = scanner.next();
+
+                    System.out.println("Cuál es el elemento de red al que pertenece este conjunto de datos?");
+                    host = scanner.next();
+
+                    System.out.println("Cuál es el número máximo de parámetros que pueden tener un valor?");
+                    maxParamWithValue = scanner.nextInt();
+
+                    matriz = gestionArchivo.getMatrixFromCSV(fileName);
+                    
+                    getEventsLstByQ3(matriz, maxParamWithValue, host);
+
                     break;
                 case 9:
                     System.out.println("ADIOS!!!");
@@ -518,7 +563,7 @@ public class Principal {
             // Armar columnas 
             //for (Integer timestamp : hs) {
             for (Integer timestamp : tsHT) {
-                gestionArchivo.escrbir(getLineSNMPInstance(listaItems, timestamp, false), true);
+                gestionArchivo.escrbir(getLineSNMPInstance(listaItems, timestamp, false, false, 0, null), true);
             }
         } catch (IOException ex) {
             Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
@@ -531,7 +576,16 @@ public class Principal {
         }
     }
 
-    private static void getDataSetSNMPagrup(String host, int desde, int hasta) {
+    /**
+     * Método que escribe un archivo .csv con las instancias de un data set
+     * SNMP. Las instancias se forman con los parámetros SNMP de un elemento de
+     * red, medidos en el rango de un minuto.
+     *
+     * @param host Nombre del elemento de red
+     * @param desde Fecha inicial
+     * @param hasta Fecha final
+     */
+    private static void getDataSetSNMPagrup(String host, int desde, int hasta, boolean byMinute, List<List<String>> rangesLstAndTimestamp) {
         try {
             List<Items> listaItems = itemsJpaController.getItemsByHostName(host);
 
@@ -548,12 +602,19 @@ public class Principal {
             gestionArchivo.leerArchivo(archivo.getName());
             gestionArchivo.escrbir(encabezado.toString(), false);
 
-            //long siguiente = desde + 60; //primer rango de búsqueda
-            //hacer un while que haga las búsquedas mientras desde sea menor o igual que hasta
-            while (desde <= hasta) {
-                //System.out.println("desde "+desde+" - hasta "+hasta);
-                gestionArchivo.escrbir(getLineSNMPInstance(listaItems, desde, true), true);
-                desde = desde + 60;
+            if (byMinute) {
+                //long siguiente = desde + 60; //primer rango de búsqueda
+                //hacer un while que haga las búsquedas mientras desde sea menor o igual que hasta
+                while (desde <= hasta) {
+                    gestionArchivo.escrbir(getLineSNMPInstance(listaItems, desde, true, false, 0, null), true);
+                    desde = desde + 60;
+                }
+            } else {
+                //for(int [] rangos : rangesLstAndTimestamp){
+                for (List<String> rangos : rangesLstAndTimestamp) {
+                    //gestionArchivo.escrbir(getLineSNMPInstance(listaItems, rangos[0], false, true, rangos[1]), true);
+                    gestionArchivo.escrbir(getLineSNMPInstance(listaItems, Integer.valueOf(rangos.get(0)), false, true, Integer.valueOf(rangos.get(1)), rangos.get(2)), true);
+                }
             }
 
         } catch (IOException ex) {
@@ -712,23 +773,40 @@ public class Principal {
     }
 
     /**
+     * Método que obtiene UNA instancia conformada por los valores de una lista
+     * de ítems
      *
-     * @param it
-     * @param timestamp
-     * @return
+     * @param items Ítems que conforman los atributos de la instancia.
+     * @param initial_timestamp Timestamp en el cual se buscarán los valores de
+     * los ítems/atributos. También indica el tiempo inicial del rango de
+     * búsqueda si se está creando una instancia para un rango de tiempo
+     * (byMinute ó byRange = true)
+     * @param byMinute Si la instancia se crea para un rango de tiempo de un
+     * minuto, con tiempo inicial = @param timestamp
+     * @param byRange Si se entrega el rango de búsqueda
+     * @param final_timestamp Si byRange=true, tiempo final del rango de
+     * búsqueda de parámetros para la creación de la instancia. 0 si
+     * byRange=false
+     * @return String que representa la instancia (valores separados por ,)
      */
-    private static String getLineSNMPInstance(List<Items> items, int timestamp, boolean byRange) {
+    private static String getLineSNMPInstance(List<Items> items, int initial_timestamp, boolean byMinute, boolean byRange, int final_timestamp, String timestamp) {
         StringBuilder instance = new StringBuilder();
-        instance.append(timestamp).append(",");
+        if (byRange) {//tomar la información de un timestamp ya calculado previamente para cada rango
+            instance.append(timestamp).append(",");
+        } else {
+            instance.append(initial_timestamp).append(",");
+        }
         int measuredItems = 0;
         for (Items it : items) {
             switch (it.getValueType()) {
                 case 0: //float
                     Double valD = null;
-                    if (byRange) {
-                        valD = historyJpaController.getHistoryValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    if (byMinute) {
+                        valD = historyJpaController.getHistoryValueByItemIdAndRange(it.getItemid(), initial_timestamp, initial_timestamp + 59);
+                    } else if (byRange) {
+                        valD = historyJpaController.getHistoryValueByItemIdAndRange(it.getItemid(), initial_timestamp, final_timestamp);
                     } else {
-                        valD = historyJpaController.getHistoryValueByItemId(it.getItemid(), timestamp);
+                        valD = historyJpaController.getHistoryValueByItemId(it.getItemid(), initial_timestamp);
                     }
 
                     if (valD != null) {
@@ -741,10 +819,12 @@ public class Principal {
                     break;
                 case 1: //Str
                     String valS = null;
-                    if (byRange) {
-                        valS = historyStrJpaController.getHistoryStrValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    if (byMinute) {
+                        valS = historyStrJpaController.getHistoryStrValueByItemIdAndRange(it.getItemid(), initial_timestamp, initial_timestamp + 59);
+                    } else if (byRange) {
+                        valS = historyStrJpaController.getHistoryStrValueByItemIdAndRange(it.getItemid(), initial_timestamp, final_timestamp);
                     } else {
-                        valS = historyStrJpaController.getHistoryStrValueByItemId(it.getItemid(), timestamp);
+                        valS = historyStrJpaController.getHistoryStrValueByItemId(it.getItemid(), initial_timestamp);
                     }
 
                     if (valS != null) {
@@ -757,10 +837,12 @@ public class Principal {
                     break;
                 case 2: //Log
                     String valL = null;
-                    if (byRange) {
-                        valL = historyLogJpaController.getHistoryLogValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    if (byMinute) {
+                        valL = historyLogJpaController.getHistoryLogValueByItemIdAndRange(it.getItemid(), initial_timestamp, initial_timestamp + 59);
+                    } else if (byRange) {
+                        valL = historyLogJpaController.getHistoryLogValueByItemIdAndRange(it.getItemid(), initial_timestamp, final_timestamp);
                     } else {
-                        valL = historyLogJpaController.getHistoryLogValueByItemId(it.getItemid(), timestamp);
+                        valL = historyLogJpaController.getHistoryLogValueByItemId(it.getItemid(), initial_timestamp);
                     }
 
                     if (valL != null) {
@@ -773,10 +855,12 @@ public class Principal {
                     break;
                 case 3: //Uint
                     Long valI = null;
-                    if (byRange) {
-                        valI = historyUintJpaController.getHistoryUintValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    if (byMinute) {
+                        valI = historyUintJpaController.getHistoryUintValueByItemIdAndRange(it.getItemid(), initial_timestamp, initial_timestamp + 59);
+                    } else if (byRange) {
+                        valI = historyUintJpaController.getHistoryUintValueByItemIdAndRange(it.getItemid(), initial_timestamp, final_timestamp);
                     } else {
-                        valI = historyUintJpaController.getHistoryUintValueByItemId(it.getItemid(), timestamp);
+                        valI = historyUintJpaController.getHistoryUintValueByItemId(it.getItemid(), initial_timestamp);
                     }
 
                     if (valI != null) {
@@ -789,10 +873,12 @@ public class Principal {
                     break;
                 default: //Text
                     String valT = null;
-                    if (byRange) {
-                        valT = historyTextJpaController.getHistoryTextValueByItemIdAndRange(it.getItemid(), timestamp, timestamp + 59);
+                    if (byMinute) {
+                        valT = historyTextJpaController.getHistoryTextValueByItemIdAndRange(it.getItemid(), initial_timestamp, initial_timestamp + 59);
+                    } else if (byRange) {
+                        valT = historyTextJpaController.getHistoryTextValueByItemIdAndRange(it.getItemid(), initial_timestamp, final_timestamp);
                     } else {
-                        valT = historyTextJpaController.getHistoryTextValueByItemId(it.getItemid(), timestamp);
+                        valT = historyTextJpaController.getHistoryTextValueByItemId(it.getItemid(), initial_timestamp);
                     }
 
                     if (valT != null) {
@@ -924,10 +1010,10 @@ public class Principal {
      * eventos de la lista de elementos de red y el archivo correspondiente al
      * data set
      *
-     * @param fileName
-     * @param eleRedInt
-     * @param desde
-     * @param hasta
+     * @param fileName Archivo correspondiente al conjunto de datos que se va a etiquetar
+     * @param eleRedInt Lista de nombres de elementos de red internos a partir de los cuales se etiquetará
+     * @param desde fecha desde donde se buscarán los eventos de los elementos de red internos
+     * @param hasta fecha hasta donde se buscarán los eventos de los elementos de red internos
      */
     private static void setClassesLabel(String fileName, String[] eleRedInt, int desde, int hasta, int label) {
         BufferedWriter bw = null;
@@ -1095,6 +1181,148 @@ public class Principal {
         }
 
     }
+    
+    /**
+     * 
+     * @param fileName
+     * @param eventsFiles
+     * @param label 
+     */
+    private static void setClassesLabelByFiles(String fileName, String[] eventsFiles, int label) {
+        BufferedWriter bw = null;
+        try {
+
+            if (label == 6) {
+                label = 5;
+            }
+
+            String capa = eventsFiles[0];
+            
+            //data set del dispositivo periférico sin etiqueta
+            List<String[]> matrizPerif = gestionArchivo.getMatrixFromCSV(fileName);
+            int numAttr = matrizPerif.get(0).length;
+           
+            for (String eventFile : eventsFiles) {              
+                //Convierto archivo de eventos a matriz
+                List<String[]> matrizEvents = gestionArchivo.getMatrixFromCSV(eventFile);
+                
+                //Recorro cada matriz de eventos
+                for (int i = 1; i < matrizEvents.size(); i++) {//desde 1 para no leer el encabezado
+                    
+                    //1_event_id,2_timestamp,3_recoveryTimestamp
+                    String[] eventArray = matrizEvents.get(i);
+                    
+                    //Obtengo el objeto Event correspondiente al evento
+                    Events e = eventsJpaController.findEvents(Long.valueOf(eventArray[0]));
+                    //Obtengo el timestamp del evento (el que viene en el archivo)
+                    long eTimestamp = Long.valueOf(eventArray[1]);
+                    
+                    for (int j = 1; j < matrizPerif.size(); j++) {//desde 1 para no leer el encabezado
+                        // Los tiempos que vienen en la matriz ya tienen una granularidad por minuto
+
+                        int tPerif = Integer.valueOf(matrizPerif.get(j)[0]);
+                       /* int tPerifAnterior = 0;
+                        if (j != 1) {
+                            tPerifAnterior = Integer.valueOf(matrizPerif.get(j - 1)[0]);
+                        }*/
+                       
+                        int tPerifPos = 0;
+                        if (j != (matrizPerif.size()-1)) {
+                            tPerifPos = Integer.valueOf(matrizPerif.get(j + 1)[0]);
+                        }
+
+                        //if (tPerifAnterior != 0 && tPerifAnterior < tEvent && (tPerif == tEvent || tPerif > tEvent)) {
+                        if (eTimestamp == tPerif || 
+                                (tPerifPos!=0 && tPerif < eTimestamp && eTimestamp<tPerifPos)) {
+
+                            //CLASIFICO EVENTO EN LA INSTANCIA CORRESPONDIENTE
+                            matrizPerif.set(j, getClassifiedInstance(numAttr, label, e, capa, matrizPerif.get(j)));
+
+                            //CLASIFICO EVENTO EN LAS INSTANCIAS CORRESPONDIENTES A SU DURACIÓN
+                            int tRecup = Integer.valueOf(eventArray[2]);;
+                            int instanciaPosterior = j + 1;
+
+                            if (e.getEventRecovery() != null && instanciaPosterior < matrizPerif.size()) {
+                                
+                                int tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);//timestamp de instancia posterior
+                                while (tRecup >= tPerifPosterior) {
+                                    //creo etiqueta
+                                    matrizPerif.set(instanciaPosterior, getClassifiedInstance(numAttr, label, e, capa, matrizPerif.get(instanciaPosterior)));
+                                    //actualizo banderas
+                                    instanciaPosterior = instanciaPosterior + 1;
+                                    if (instanciaPosterior < matrizPerif.size()) {
+                                        tPerifPosterior = Integer.valueOf(matrizPerif.get(instanciaPosterior)[0]);
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            //imprimir la matriz en un archivo      
+            File archivo = new File(fileName.replaceAll(".csv", "") + "_LabeledQ3.csv");
+            bw = new BufferedWriter(new FileWriter(archivo));
+
+            gestionArchivo.leerArchivo(archivo.getAbsolutePath());
+
+            StringBuilder headLine = new StringBuilder();
+            for (int i = 0; i < matrizPerif.get(0).length; i++) {
+                headLine.append(matrizPerif.get(0)[i]).append(",");
+            }
+            headLine.append("class");
+            gestionArchivo.escrbir(headLine.toString(), false);
+
+            for (int i = 1; i < matrizPerif.size(); i++) {
+                StringBuilder instanceLine = new StringBuilder();
+                //for (int j = 0; j < matrizPerif.get(i).length; i++) {
+                for (String attribute : matrizPerif.get(i)) {
+                    instanceLine.append(attribute).append(",");
+                }
+                if (matrizPerif.get(0).length == matrizPerif.get(i).length) {//no tiene etiqueta, entonces pongo la coma
+
+                    switch (label) {
+                        case 1: //Mayor Severidad 
+                            instanceLine.append("0,");
+                            break;
+                        case 3: //Niveles + Mayor Severidad
+                            //ETIQUETA; DxAy x->mayor severidad del nivel distribución, y->mayor severidad del nivel de acceso
+                            instanceLine.append("D0A0,");
+                            break;
+                        case 4: //3. Nivel cercano + Mayor severidad del nivel más cercano
+                            //ETIQUETA: Xx, X->D nivel distribución, A nivel acceso; x-> mayor severidad del nivel
+                            instanceLine.append("NE,");
+                            break;
+                        case 5: //Mayor severidad y nivel
+                            instanceLine.append("NE,");
+                            break;
+                        case 6: //Mayor severidad y nivel
+                            instanceLine.append("NE,");
+                            break;
+                        default: // Elem-eventdID|...
+                            instanceLine.append(",");
+                            break;
+                    }
+
+                }
+                gestionArchivo.escrbir(instanceLine.deleteCharAt(instanceLine.length() - 1).toString(), true);
+            }
+
+        } catch (IOException ex) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception e) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, e);
+        } finally {
+            try {
+                bw.close();
+            } catch (IOException ex) {
+                Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+    }
 
     private static String[] getClassifiedInstance(int numAttr, int label, Events event, String nombreEleRed, String[] instanciaArray) {
         List<String> instancia = new ArrayList<>(Arrays.asList(instanciaArray));//matrizPerif.get(j)));//get(j - 1)));
@@ -1134,11 +1362,10 @@ public class Principal {
         for (Functions f : lista) {
 
             if (!f.getTriggerid().getDescription().contains("Interface Null0")
-                   && !f.getTriggerid().getDescription().contains("Interface Management")
-                   && !f.getTriggerid().getDescription().contains("Interface Vlan")) { //Para ignorar los eventos disparados por interfaces nulas     
+                    && !f.getTriggerid().getDescription().contains("Interface Management")
+                    && !f.getTriggerid().getDescription().contains("Interface Vlan")) { //Para ignorar los eventos disparados por interfaces nulas     
                 listaETemporal.addAll(eventsJpaController.getEventsByTriggersAndDate(f.getTriggerid().getTriggerid(), desde, hasta));
-            //}
-
+                //}
                 //SÓLO AGREGAR EL EVENTO SI NO ES DE RECUPERACIÓN
                 for (int i = 0; i < listaETemporal.size(); i++) {
                     List<EventRecovery> er = eventRecoveryJpaController.getEventRecoveryById(listaETemporal.get(i));
@@ -1146,9 +1373,10 @@ public class Principal {
                         listaE.add(listaETemporal.get(i));
                     }
                 }
+                listaETemporal.clear();
             }
         }
-
+        
         Collections.sort(listaE, (x, y) -> Integer.valueOf(x.getClock()).compareTo(y.getClock()));
 
         return listaE;
@@ -1254,5 +1482,186 @@ public class Principal {
         }
 
         return label.toString();
+    }
+
+    /**A partir de una matriz de datos snmp, obtiene los rangos de tiempo para agrupación de instancias junto con el timestamp asignado
+     * a cada rango de acuerdo a la dispersión de los datos en el rango.
+     *
+     * @param matriz
+     * @param maxParamWithValue Máximo número de parámetros que pueden tener valor en un rango de tiempo (equivalente al número de 
+     * parámetros de una instancia que pueden tener valor)
+     * @param granulTimestamp Granularidad del timestamp asignado a cada rango. 1-> granularidad por segundo, 2-> granularidad por minuto
+     * @return
+     */
+    public static List<List<String>> getRangesFromMatrix(List<String[]> matriz, int maxParamWithValue, int granulTimestamp) {
+
+        List<List<String>> rangos = new ArrayList<>();
+
+        int timestampI = Integer.valueOf(matriz.get(1)[0]); //primera instancia del conjunto de datos
+        int timestampF;// timestampI+180; //porque las medidas del sx de monitorización son cada 3 minutos, así que no puede sobrepasar ese tiempo
+        int instancia;
+
+        for (int i = 1; i < matriz.size(); i++) {//inicia en 1 porque debo ignorar el encabezado                       
+            timestampF = Integer.valueOf(matriz.get(i)[0]) + 179; //puse 179 en lugar de 180 porque hubo un caso donde en el segundo 179 aparecen datos pero es del otro grupo por lógica
+
+            instancia = i;
+
+            //Orden de los elementos de esta lista: 0->ti, 1->tf, 2->timestamp
+            //List<Long> rango = new ArrayList<>();//contiene los datos del rango correspondiente a la instancia que se agrupa
+            //rango.add(Long.valueOf(matriz.get(i)[0]));
+            List<String> rango = new ArrayList<>();//contiene los datos del rango correspondiente a la instancia que se agrupa
+            rango.add(matriz.get(i)[0]);
+
+            List<int[]> muestras = new ArrayList();
+            int n = 0;//numero demuestras para el rango
+
+            while (timestampI < timestampF) {
+                int numAttrWithValue = 0;
+                //obtengo la instancia y cuento los atributos con valor != -1
+                //for(String atributo : matriz.get(instancia)){
+                String atributo;
+                for (int j = 1; j < matriz.get(instancia).length; j++) {//desde 1 para no tener en cuenta el timestamp
+                    atributo = matriz.get(instancia)[j];
+                    if (atributo != null && !atributo.equalsIgnoreCase("-1")) {
+                        numAttrWithValue = numAttrWithValue + 1;
+                    }
+                }
+
+                n = n + numAttrWithValue;
+
+                if (n <= maxParamWithValue) {
+                    int[] numAttrbByInstance = {Integer.valueOf(matriz.get(instancia)[0]), numAttrWithValue};
+                    muestras.add(numAttrbByInstance);
+
+                    instancia = instancia + 1;
+                    if (instancia < matriz.size()) {
+                        timestampI = Integer.valueOf(matriz.get(instancia)[0]);
+                    } else {
+                        ///Ver cómo poner el último rango
+                        break;
+                    }
+                } else {
+                    n = n - numAttrWithValue;
+                    break;
+                }
+
+            }
+
+            //tiempo final del rango detectado
+            //rango.add(Long.valueOf(matriz.get(instancia - 1)[0]));
+            rango.add(matriz.get(instancia - 1)[0]);
+
+            //Obtengo la posición del tercer cuartil
+            float Q = 0;
+            if (n % 2 == 0) {//Qk = kn/4; para k=3 (tercer cuartil),para n par
+                Q = (3 * n) / 4;
+            } else { //Qk = k(n+1)/4; para k=3 (tercer cuartil),para n impar
+                Q = (3 * (n + 1)) / 4;
+            }
+
+            //Determino timestamp para el conjunto
+            int sumaM = 0;
+            int timestampQ = 0;
+
+            for (int[] muestra : muestras) {
+                sumaM = sumaM + muestra[1];//1 es la posición del valor del número de atributos para ese timestamp
+                if (sumaM >= Q) {
+                    //aquí está la posiciòn del tercer cuartil
+                    timestampQ = muestra[0]; //el timestamp de la muestra donde se encuentra el tercer cuartil
+                    break;
+                }
+            }
+
+            //agrego a la lista el dato del timestamp para la instancia
+            if (granulTimestamp == 1) {//granularidad por minuto y tercer cuartil
+                // timestampQ a segundo00;
+                //Granularidad por minuto para el timestamp de los eventos
+                Calendar c = Calendar.getInstance();
+                c.setTime(new Date(Long.valueOf(timestampQ) * 1000));
+                c.set(Calendar.SECOND, 0);
+
+                //rango.add(c.getTimeInMillis() / 1000);
+                rango.add(String.valueOf(c.getTimeInMillis() / 1000));
+            } else {//granularidad por segundo y tercer cuartil
+                //rango.add(Long.valueOf(timestampQ));
+                rango.add(String.valueOf(timestampQ));
+            }
+
+            System.err.println("n->" + n + "-" + rango.get(0) + "-" + rango.get(1) + "-timestamp: " + rango.get(2));
+
+            //agrego el rango a la lista de rangos para la búsqueda
+            rangos.add(rango);
+
+            //actualizo el i;
+            i = instancia - 1;
+        }
+
+        return rangos;
+    }
+
+    /**Escribe un archivo con la lista de eventos de un elemento de red cuyo timestamp corresponde al tercer
+     * cuartil de la distribución de parámetros de la que hace parte el evento.
+     * 
+     * @param matriz Matriz de parámetros SNMP distribuidos
+     * @param maxParamWithValue Máximo número de parámetros del elemento de red que pueden tener un valor
+     * @param host Nombre del elemento de red
+     */
+    public static void getEventsLstByQ3(List<String[]> matriz, int maxParamWithValue, String host) {
+        BufferedWriter bw=null;
+        try {   
+            //Crear archivo que tendrá los resultados:
+            File archivo = new File(host + "_Events_tQ3.csv");
+            bw = new BufferedWriter(new FileWriter(archivo));
+            //gestionArchivo = new GestionArchivo();
+            gestionArchivo.leerArchivo(archivo.getName());
+
+            List<List<String>> rangosParams = getRangesFromMatrix(matriz, maxParamWithValue, 1); //granularidad por minuto
+
+            List<Events> events = getEventsByHost(host, Integer.valueOf(rangosParams.get(0).get(0)), Integer.valueOf(rangosParams.get(rangosParams.size()-1).get(0)));
+           
+            System.out.println("lista "+events.size());
+            //Creo un HashSet para eliminar ideventos repetidos
+            HashSet<Events> eventsHS = new HashSet();
+            eventsHS.addAll(events);
+            System.out.println("hash set "+eventsHS.size());
+    
+            String encabezado = "1_event_id,2_timestamp,3_recoveryTimestamp";
+            gestionArchivo.escrbir(encabezado, false);
+            System.err.println("tamaño eventos "+events.size());
+            for (Events event : eventsHS) {
+                for(List<String> rango : rangosParams){
+                    //Orden de los elementos de las listas: 0->ti, 1->tf, 2->timestamp
+                    if(Integer.valueOf(rango.get(0)) <= event.getClock() && event.getClock() <= Integer.valueOf(rango.get(1))){
+                        
+                        //StringBuilder linea = new StringBuilder(rango.get(2));
+                        StringBuilder linea = new StringBuilder();
+                        linea.append(event.getEventid()).append(",").append(rango.get(2)).append(",");
+                        //linea.append(",").append(event.getEventid());
+                        
+                        //Busco el timestamp para el tiempo de recuperación
+                        for(List<String> rangoRecup : rangosParams){
+                             if(Integer.valueOf(rangoRecup.get(0)) <= event.getEventRecovery().getREventid().getClock() && 
+                                     event.getEventRecovery().getREventid().getClock() <= Integer.valueOf(rangoRecup.get(1))){
+                                 linea.append(rangoRecup.get(2));
+                             }
+                        }
+                        
+                        System.err.println("Rango: "+rango.get(0)+"-"+rango.get(1)+" Timestamp: "+rango.get(2)+" Evento: "+event.getEventid()+" t evento: "+event.getClock());
+
+                        gestionArchivo.escrbir(linea.toString(), true);
+                        break;
+                    }
+                }  
+            }
+            
+        } catch (IOException ex) {
+            Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                bw.close();
+            } catch (IOException ex) {
+                Logger.getLogger(Principal.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
     }
 }

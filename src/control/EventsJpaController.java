@@ -280,14 +280,14 @@ public class EventsJpaController implements Serializable {
 ////        }
 ////    }
 ////
-////    public Events findEvents(Long id) {
-////        EntityManager em = getEntityManager();
-////        try {
-////            return em.find(Events.class, id);
-////        } finally {
-////            em.close();
-////        }
-////    }
+    public Events findEvents(Long id) {
+        EntityManager em = getEntityManager();
+        try {
+            return em.find(Events.class, id);
+        } finally {
+            em.close();
+        }
+    }
 ////
 ////    public int getEventsCount() {
 //        EntityManager em = getEntityManager();
