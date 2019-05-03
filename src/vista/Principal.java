@@ -589,7 +589,7 @@ public class Principal {
         try {
             List<Items> listaItems = itemsJpaController.getItemsByHostName(host);
 
-            StringBuilder encabezado = new StringBuilder("timestamp,");
+            StringBuilder encabezado = new StringBuilder("timestamp,range,");//range: da idea de la dispersión de los parámetros, en segundos
             for (Items item : listaItems) {
                 encabezado.append(item.getName().replace(" ", "_")).append(",");
             }
@@ -793,8 +793,11 @@ public class Principal {
         StringBuilder instance = new StringBuilder();
         if (byRange) {//tomar la información de un timestamp ya calculado previamente para cada rango
             instance.append(timestamp).append(",");
+            //calculo el rango para indicar qué tan dispersos están los parámetros
+            int range = final_timestamp - initial_timestamp;
+            instance.append(range).append(",");//rango o dispersión
         } else {
-            instance.append(initial_timestamp).append(",");
+            instance.append(initial_timestamp).append(",,");//el valor de rango o dispersión lo dejo vacío para este caso
         }
         int measuredItems = 0;
         for (Items it : items) {
